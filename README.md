@@ -7,6 +7,44 @@ This repository contains two independent Go command-line tools:
 
 Both commands use only the Go standard library.
 
+## Download a release
+
+Prebuilt binaries are available on the [GitHub Releases page](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest). Download the two files that match your operating system:
+
+| Operating system | Video CLI | Livestream CLI |
+| --- | --- | --- |
+| Linux (amd64) | [`tiktok-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-linux-amd64) | [`tiktok_livestream-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-linux-amd64) |
+| macOS Apple Silicon (arm64) | [`tiktok-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-darwin-arm64) | [`tiktok_livestream-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-darwin-arm64) |
+| Windows (amd64) | [`tiktok-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-windows-amd64.exe) | [`tiktok_livestream-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-windows-amd64.exe) |
+
+On Linux, make both files executable and run them from the download directory:
+
+```bash
+chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
+./tiktok-linux-amd64 -help
+./tiktok-linux-amd64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
+```
+
+On macOS with Apple Silicon:
+
+```bash
+chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
+./tiktok-darwin-arm64 -help
+./tiktok-darwin-arm64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
+```
+
+On Windows, open PowerShell in the download directory:
+
+```powershell
+.\tiktok-windows-amd64.exe -help
+.\tiktok-windows-amd64.exe -download "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
+```
+
+Replace the example URLs with the TikTok video or LIVE room you want to process. The remaining examples use `go run` for source builds; when using a release, replace `go run ./cmd/tiktok` or `go run ./cmd/tiktok_livestream` with the downloaded executable name shown above.
+
 ## Project layout
 
 ```text
