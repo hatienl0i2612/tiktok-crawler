@@ -20,6 +20,8 @@ type options struct {
 	format    string
 	quality   string
 	codec     string
+	codecSet  bool
+	formatSet bool
 	json      bool
 	all       bool
 	verbose   bool
@@ -69,11 +71,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	selected, err := livestream.SelectStream(result.Streams, livestream.SelectOptions{
-		Codec:   options.codec,
-		Quality: options.quality,
-		Format:  options.format,
-	})
+	selected, err := selectPreferredStream(result.Streams, options)
 	if err != nil {
 		return err
 	}
@@ -97,9 +95,9 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("tiktok_livestream", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&options.liveURL, "url", "", "TikTok LIVE URL (may also be supplied as the final argument)")
-	flags.StringVar(&options.format, "format", "hls", "stream format: hls, flv, cmaf, dash, lls, or auto")
+	flags.StringVar(&options.format, "format", "hls", "preferred stream format: hls, flv, cmaf, dash, lls, or auto")
 	flags.StringVar(&options.quality, "quality", "best", "quality: best, origin, uhd60, uhd, hd60, hd, sd, ld, or ao")
-	flags.StringVar(&options.codec, "codec", "h264", "video codec: h264, h265, or auto")
+	flags.StringVar(&options.codec, "codec", "h264", "preferred video codec: h264, h265, or auto")
 	flags.BoolVar(&options.json, "json", false, "print metadata and all streams as JSON")
 	flags.BoolVar(&options.all, "all", false, "print every stream instead of only the selected URL")
 	flags.BoolVar(&options.verbose, "verbose", false, "print a short room summary to stderr")
@@ -114,6 +112,14 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	if err := flags.Parse(args); err != nil {
 		return options, err
 	}
+	flags.Visit(func(current *flag.Flag) {
+		switch current.Name {
+		case "codec":
+			options.codecSet = true
+		case "format":
+			options.formatSet = true
+		}
+	})
 	if options.liveURL == "" {
 		if flags.NArg() != 1 {
 			flags.Usage()
@@ -134,6 +140,51 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options, err
 	}
 	return options, nil
+}
+
+func selectPreferredStream(streams []livestream.Stream, cliOptions options) (*livestream.Stream, error) {
+	candidates := []livestream.SelectOptions{{
+		Codec:   cliOptions.codec,
+		Quality: cliOptions.quality,
+		Format:  cliOptions.format,
+	}}
+	if !cliOptions.codecSet {
+		candidates = append(candidates, livestream.SelectOptions{
+			Codec:   "auto",
+			Quality: cliOptions.quality,
+			Format:  cliOptions.format,
+		})
+	}
+	if !cliOptions.formatSet {
+		candidates = append(candidates, livestream.SelectOptions{
+			Codec:   cliOptions.codec,
+			Quality: cliOptions.quality,
+			Format:  "auto",
+		})
+	}
+	if !cliOptions.codecSet && !cliOptions.formatSet {
+		candidates = append(candidates, livestream.SelectOptions{
+			Codec:   "auto",
+			Quality: cliOptions.quality,
+			Format:  "auto",
+		})
+	}
+
+	seen := make(map[string]bool, len(candidates))
+	var selectionErr error
+	for _, candidate := range candidates {
+		key := candidate.Codec + "\x00" + candidate.Quality + "\x00" + candidate.Format
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		selected, err := livestream.SelectStream(streams, candidate)
+		if err == nil {
+			return selected, nil
+		}
+		selectionErr = err
+	}
+	return nil, selectionErr
 }
 
 func validateOptions(options options) error {

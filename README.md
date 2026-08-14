@@ -79,7 +79,7 @@ Downloads are written to a temporary file and moved into place only after comple
 
 ## Livestream CLI
 
-Print one best-quality HLS/H.264 URL:
+Print the best available stream URL, preferring H.264 and HLS when that combination is available:
 
 ```bash
 go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live'

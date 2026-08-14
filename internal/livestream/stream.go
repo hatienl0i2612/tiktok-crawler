@@ -112,7 +112,7 @@ func SelectStream(streams []Stream, options SelectOptions) (*Stream, error) {
 		if format != "auto" && stream.Protocol != format {
 			continue
 		}
-		if quality != "best" && stream.Quality != quality {
+		if quality != "best" && normalizeQuality(stream.Quality) != normalizeQuality(quality) {
 			continue
 		}
 		if quality != "ao" && stream.Quality == "ao" {
@@ -154,7 +154,11 @@ func sortStreams(streams []Stream) {
 }
 
 func qualityRank(quality string) int {
-	return rank(qualityOrder, quality)
+	return rank(qualityOrder, normalizeQuality(quality))
+}
+
+func normalizeQuality(quality string) string {
+	return strings.ReplaceAll(strings.ToLower(strings.TrimSpace(quality)), "_", "")
 }
 
 func protocolRank(protocol string) int {
