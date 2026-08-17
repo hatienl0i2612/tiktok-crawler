@@ -33,9 +33,7 @@ func (client *Client) Download(
 		if info.IsDir() {
 			return nil, fmt.Errorf("output path is a directory: %s", absolutePath)
 		}
-		if !options.Overwrite {
-			return nil, fmt.Errorf("output file already exists: %s (use -force to replace it)", absolutePath)
-		}
+		return nil, fmt.Errorf("output file already exists: %s (choose another -output path)", absolutePath)
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return nil, fmt.Errorf("inspect output path: %w", statErr)
 	}
@@ -145,14 +143,10 @@ func (client *Client) downloadURL(
 	if err := temporary.Close(); err != nil {
 		return nil, fmt.Errorf("close temporary download: %w", err)
 	}
-	if !options.Overwrite {
-		if _, err := os.Lstat(outputPath); err == nil {
-			return nil, fmt.Errorf("output file appeared during download: %s", outputPath)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("inspect output path: %w", err)
-		}
-	} else if err := os.Remove(outputPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("replace output file: %w", err)
+	if _, err := os.Lstat(outputPath); err == nil {
+		return nil, fmt.Errorf("output file appeared during download: %s", outputPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("inspect output path: %w", err)
 	}
 	if err := os.Rename(temporaryPath, outputPath); err != nil {
 		return nil, fmt.Errorf("publish download: %w", err)

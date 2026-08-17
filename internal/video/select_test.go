@@ -20,10 +20,9 @@ func TestSelectMedia(t *testing.T) {
 		options SelectOptions
 		wantURL string
 	}{
-		{name: "default codec", options: SelectOptions{Quality: "best"}, wantURL: "h264-1080"},
-		{name: "automatic codec", options: SelectOptions{Codec: "auto", Quality: "best"}, wantURL: "h265-1080"},
-		{name: "exact height", options: SelectOptions{Codec: "h264", Quality: "720p"}, wantURL: "h264-720"},
-		{name: "watermark", options: SelectOptions{Codec: "auto", Quality: "best", Watermarked: true}, wantURL: "watermark"},
+		{name: "best quality", options: SelectOptions{Quality: "best"}, wantURL: "h264-1080"},
+		{name: "exact height", options: SelectOptions{Quality: "720p"}, wantURL: "h264-720"},
+		{name: "watermark", options: SelectOptions{Quality: "best", Watermarked: true}, wantURL: "watermark"},
 	}
 	for _, test := range tests {
 		test := test
@@ -45,8 +44,7 @@ func TestSelectMediaErrors(t *testing.T) {
 
 	media := []Media{{Codec: "h264", Quality: "720p", Height: 720, URL: "video"}}
 	for name, options := range map[string]SelectOptions{
-		"codec":   {Codec: "vp9", Quality: "best"},
-		"quality": {Codec: "h264", Quality: "full-hd"},
+		"quality": {Quality: "full-hd"},
 	} {
 		name, options := name, options
 		t.Run(name, func(t *testing.T) {
@@ -56,7 +54,7 @@ func TestSelectMediaErrors(t *testing.T) {
 			}
 		})
 	}
-	_, err := SelectMedia(media, SelectOptions{Codec: "h265", Quality: "best"})
+	_, err := SelectMedia(media, SelectOptions{Quality: "best", Watermarked: true})
 	if err == nil || !strings.Contains(err.Error(), "available variants:") {
 		t.Fatalf("unexpected no-match error: %v", err)
 	}

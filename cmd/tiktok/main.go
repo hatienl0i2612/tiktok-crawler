@@ -18,29 +18,13 @@ import (
 
 type options struct {
 	videoURL  string
-	download  bool
 	output    string
-	force     bool
 	watermark bool
-	codec     string
 	quality   string
-	urlOnly   bool
-	verbose   bool
-	cookie    string
-	userAgent string
-	timeout   time.Duration
+	json      bool
 }
 
-type output struct {
-	InputURL      string        `json:"input_url"`
-	FinalURL      string        `json:"final_url"`
-	Sources       []string      `json:"sources"`
-	FetchedAt     time.Time     `json:"fetched_at"`
-	Warnings      []string      `json:"warnings,omitempty"`
-	Video         video.Video   `json:"video"`
-	SelectedMedia *video.Media  `json:"selected_media"`
-	Media         []video.Media `json:"media"`
-}
+const requestTimeout = 5 * time.Minute
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -58,22 +42,21 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	client, err := video.NewClient(video.ClientOptions{
-		Cookie:    options.cookie,
-		UserAgent: options.userAgent,
-	})
+	client, err := video.NewClient(video.ClientOptions{Cookie: os.Getenv("TIKTOK_COOKIE")})
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 	defer cancel()
 
 	result, err := client.Resolve(ctx, options.videoURL)
 	if err != nil {
 		return err
 	}
+	if options.json {
+		return printJSON(stdout, result)
+	}
 	selected, err := video.SelectMedia(result.Media, video.SelectOptions{
-		Codec:       options.codec,
 		Quality:     options.quality,
 		Watermarked: options.watermark,
 	})
@@ -81,54 +64,35 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
-	if options.verbose {
-		printSummary(stderr, result, selected)
+	outputPath := options.output
+	if outputPath == "" {
+		outputPath = video.DefaultFilename(result, selected)
 	}
-	if options.download {
-		outputPath := options.output
-		if outputPath == "" {
-			outputPath = video.DefaultFilename(result, selected)
-		}
-		progress := newProgressDisplay(stderr)
-		progress.start(result, selected, outputPath)
-		downloadOptions := video.DownloadOptions{
-			OutputPath: outputPath,
-			Referer:    result.FinalURL,
-			Overwrite:  options.force,
-			Progress:   progress.update,
-		}
-		download, err := client.Download(ctx, *selected, downloadOptions)
-		if err != nil {
-			progress.stop()
-			return err
-		}
-		progress.complete(download)
-		_, err = fmt.Fprintln(stdout, download.Path)
+	progress := newProgressDisplay(stderr)
+	progress.start(result, selected, outputPath)
+	downloadOptions := video.DownloadOptions{
+		OutputPath: outputPath,
+		Referer:    result.FinalURL,
+		Progress:   progress.update,
+	}
+	download, err := client.Download(ctx, *selected, downloadOptions)
+	if err != nil {
+		progress.stop()
 		return err
 	}
-	if options.urlOnly {
-		_, err = fmt.Fprintln(stdout, selected.URL)
-		return err
-	}
-	return printJSON(stdout, result, selected)
+	progress.complete(download)
+	_, err = fmt.Fprintln(stdout, download.Path)
+	return err
 }
 
 func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var options options
 	flags := flag.NewFlagSet("tiktok", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&options.videoURL, "url", "", "TikTok video URL (may also be supplied as the final argument)")
-	flags.BoolVar(&options.download, "download", false, "download the selected video instead of printing metadata")
-	flags.StringVar(&options.output, "output", "", "download destination; setting it also enables -download")
-	flags.BoolVar(&options.force, "force", false, "replace an existing download destination")
-	flags.BoolVar(&options.watermark, "watermark", false, "require TikTok's official watermarked download variant")
-	flags.StringVar(&options.codec, "codec", "h264", "video codec: h264, h265, or auto")
+	flags.BoolVar(&options.json, "json", false, "print all video metadata and media URLs instead of downloading")
+	flags.StringVar(&options.output, "output", "", "download destination")
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on")
-	flags.BoolVar(&options.urlOnly, "url-only", false, "print only the selected signed media URL")
-	flags.BoolVar(&options.verbose, "verbose", false, "print a short video summary to stderr")
-	flags.StringVar(&options.cookie, "cookie", "", "TikTok Cookie header value (or use TIKTOK_COOKIE)")
-	flags.StringVar(&options.userAgent, "user-agent", video.DefaultUserAgent, "User-Agent sent to TikTok")
-	flags.DurationVar(&options.timeout, "timeout", 5*time.Minute, "overall metadata and download timeout")
+	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked variant")
 	flags.Usage = func() {
 		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video URL>\n\n", flags.Name())
 		flags.PrintDefaults()
@@ -137,48 +101,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	if err := flags.Parse(args); err != nil {
 		return options, err
 	}
-	codecExplicit := false
-	flags.Visit(func(current *flag.Flag) {
-		if current.Name == "codec" {
-			codecExplicit = true
-		}
-	})
-	if options.videoURL == "" {
-		if flags.NArg() != 1 {
-			flags.Usage()
-			return options, errors.New("exactly one TikTok video URL is required")
-		}
-		options.videoURL = flags.Arg(0)
-	} else if flags.NArg() != 0 {
-		return options, errors.New("do not pass the URL through both -url and the final argument")
+	if flags.NArg() != 1 {
+		flags.Usage()
+		return options, errors.New("exactly one TikTok video URL is required")
 	}
+	options.videoURL = flags.Arg(0)
 
-	options.codec = strings.ToLower(strings.TrimSpace(options.codec))
 	options.quality = strings.ToLower(strings.TrimSpace(options.quality))
 	options.output = strings.TrimSpace(options.output)
-	if options.watermark && !codecExplicit {
-		options.codec = "auto"
-	}
-	if options.output != "" {
-		options.download = true
-	}
-	if options.cookie == "" {
-		options.cookie = os.Getenv("TIKTOK_COOKIE")
-	}
-	if options.timeout <= 0 {
-		return options, errors.New("timeout must be greater than zero")
-	}
-	if options.force && !options.download {
-		return options, errors.New("-force requires -download or -output")
-	}
-	if options.urlOnly && options.download {
-		return options, errors.New("-url-only cannot be combined with -download or -output")
-	}
-	if options.codec != "h264" && options.codec != "h265" && options.codec != "auto" {
-		return options, errors.New("codec must be h264, h265, or auto")
-	}
-	if options.watermark && codecExplicit && options.codec != "auto" {
-		return options, errors.New("-codec cannot filter a watermarked download because TikTok does not label its codec; omit it or use -codec auto")
+	if options.json && (options.output != "" || options.watermark || options.quality != "best") {
+		return options, errors.New("-json cannot be combined with -output, -watermark, or a custom -quality")
 	}
 	quality := strings.TrimSuffix(options.quality, "p")
 	if options.quality != "best" {
@@ -190,47 +122,11 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	return options, nil
 }
 
-func printSummary(writer io.Writer, result *video.Result, selected *video.Media) {
-	variant := "no watermark"
-	if selected.Watermarked {
-		variant = "TikTok watermark"
-	}
-	fmt.Fprintf(
-		writer,
-		"@%s | video=%s | %dx%d | %ds | likes=%d | plays=%d\n",
-		result.Video.Author.UniqueID,
-		result.Video.ID,
-		result.Video.Width,
-		result.Video.Height,
-		result.Video.Duration,
-		result.Video.Statistics.LikeCount,
-		result.Video.Statistics.PlayCount,
-	)
-	fmt.Fprintf(
-		writer,
-		"selected: %s %s %s %dx%d\n",
-		variant,
-		selected.Codec,
-		selected.Quality,
-		selected.Width,
-		selected.Height,
-	)
-}
-
-func printJSON(writer io.Writer, result *video.Result, selected *video.Media) error {
+func printJSON(writer io.Writer, result *video.Result) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(output{
-		InputURL:      result.InputURL,
-		FinalURL:      result.FinalURL,
-		Sources:       result.Sources,
-		FetchedAt:     result.FetchedAt,
-		Warnings:      result.Warnings,
-		Video:         result.Video,
-		SelectedMedia: selected,
-		Media:         result.Media,
-	})
+	return encoder.Encode(result)
 }
 
 type progressDisplay struct {

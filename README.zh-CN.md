@@ -24,7 +24,7 @@
 ```bash
 chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
 ./tiktok-linux-amd64 -help
-./tiktok-linux-amd64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -33,7 +33,7 @@ chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
 ```bash
 chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 ./tiktok-darwin-arm64 -help
-./tiktok-darwin-arm64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -41,7 +41,7 @@ chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 
 ```powershell
 .\tiktok-windows-amd64.exe -help
-.\tiktok-windows-amd64.exe -download "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
 .\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
 ```
 
@@ -49,19 +49,13 @@ chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 
 ## 视频 CLI
 
-以 JSON 格式输出标准化元数据和所有可用媒体版本：
+下载当前最佳的 H.264 无水印视频（默认行为）：
 
 ```bash
 go run ./cmd/tiktok 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 请将 `example` 和 `1234567890123456789` 替换为目标 TikTok URL 中的用户名和视频 ID。
-
-下载默认的无水印 H.264 版本：
-
-```bash
-go run ./cmd/tiktok -download 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
 
 下载无水印视频时的输出示例：
 
@@ -77,31 +71,33 @@ Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
 /path/to/example_1234567890123456789_no_watermark_576p_h264.mp4
 ```
 
-默认文件名包含用户名、视频 ID、水印类型、画质和编解码器。使用 `-output` 指定保存路径；该参数也会自动启用下载模式：
+默认文件名包含用户名、视频 ID、水印类型、画质和编解码器。使用 `-output` 指定保存路径：
 
 ```bash
-go run ./cmd/tiktok  -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-选择最佳 H.265 版本或指定视频高度：
+下载指定高度的视频：
 
 ```bash
 go run ./cmd/tiktok \
-  -download \
-  -codec h265 \
   -quality 1080p \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-仅输出选中的带签名 URL：
+以 JSON 格式输出所有标准化元数据和媒体版本（包括带签名 URL），且不下载视频：
 
 ```bash
-go run ./cmd/tiktok -url-only 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -json 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 TikTok 网页播放器通常提供无水印播放版本。部分响应也可能包含 TikTok 官方的有水印下载地址。使用 `-watermark` 可要求该版本；如果 TikTok 未提供，工具会返回明确错误，并且不会静默回退到无水印文件。
 
-下载内容会先写入临时文件，仅在完成后移动到目标路径。除非指定 `-force`，否则已有文件不会被覆盖。带签名媒体 URL 会过期，因此旧 URL 失效后请重新抓取视频。
+```bash
+go run ./cmd/tiktok -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+下载内容会先写入临时文件，仅在完成后移动到目标路径。已有文件永远不会被覆盖；必要时请选择其他 `-output` 路径。带签名媒体 URL 会过期，因此旧 URL 失效后请重新抓取视频。
 
 ## 直播 CLI
 

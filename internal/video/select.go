@@ -10,10 +10,6 @@ import (
 
 // SelectMedia returns the highest-resolution media variant matching the requested filters.
 func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
-	codec, err := normalizeCodecFilter(options.Codec)
-	if err != nil {
-		return nil, err
-	}
 	quality, bestQuality, err := normalizeQualityFilter(options.Quality)
 	if err != nil {
 		return nil, err
@@ -24,7 +20,7 @@ func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
 		if candidate.Watermarked != options.Watermarked {
 			continue
 		}
-		if codec != "auto" && candidate.Codec != codec {
+		if !candidate.Watermarked && candidate.Codec != "h264" {
 			continue
 		}
 		if !bestQuality && candidate.Height != quality {
@@ -33,14 +29,13 @@ func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
 		filtered = append(filtered, candidate)
 	}
 	if len(filtered) == 0 {
-		variant := "without a watermark"
+		variant := "H.264 media without a watermark"
 		if options.Watermarked {
-			variant = "with a TikTok watermark"
+			variant = "media with a TikTok watermark"
 		}
 		return nil, fmt.Errorf(
-			"no media %s matches codec=%s quality=%s; available variants: %s",
+			"no %s matches quality=%s; available variants: %s",
 			variant,
-			codec,
 			options.Quality,
 			availableMediaSummary(media),
 		)
@@ -49,19 +44,6 @@ func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
 	selected := filtered[0]
 	return &selected, nil
 }
-
-func normalizeCodecFilter(codec string) (string, error) {
-	codec = strings.ToLower(strings.TrimSpace(codec))
-	if codec == "" {
-		return "h264", nil
-	}
-	codec = normalizeCodec(codec)
-	if codec != "auto" && codec != "h264" && codec != "h265" {
-		return "", errors.New("codec must be h264, h265, or auto")
-	}
-	return codec, nil
-}
-
 func normalizeQualityFilter(quality string) (int, bool, error) {
 	quality = strings.ToLower(strings.TrimSpace(quality))
 	if quality == "" || quality == "best" {

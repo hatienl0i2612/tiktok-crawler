@@ -24,7 +24,7 @@ On Linux, make both files executable and run them from the download directory:
 ```bash
 chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
 ./tiktok-linux-amd64 -help
-./tiktok-linux-amd64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -33,7 +33,7 @@ On macOS with Apple Silicon:
 ```bash
 chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 ./tiktok-darwin-arm64 -help
-./tiktok-darwin-arm64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -41,7 +41,7 @@ On Windows, open PowerShell in the download directory:
 
 ```powershell
 .\tiktok-windows-amd64.exe -help
-.\tiktok-windows-amd64.exe -download "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
 .\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
 ```
 
@@ -49,19 +49,13 @@ Replace the example URLs with the TikTok video or LIVE room you want to process.
 
 ## Video CLI
 
-Print normalized metadata and all available media profiles as JSON:
+Download the best available H.264 video without a watermark (the default behavior):
 
 ```bash
 go run ./cmd/tiktok 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Replace `example` and `1234567890123456789` with the username and video ID from the TikTok URL you want to crawl.
-
-Download the default H.264 profile without a watermark:
-
-```bash
-go run ./cmd/tiktok -download 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
 
 Sample output for a video without a watermark:
 
@@ -77,31 +71,33 @@ Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
 /path/to/example_1234567890123456789_no_watermark_576p_h264.mp4
 ```
 
-The default filename includes the username, video ID, watermark type, quality, and codec. Use `-output` to choose a destination; it also enables download mode:
+The default filename includes the username, video ID, watermark type, quality, and codec. Use `-output` to choose a destination:
 
 ```bash
-go run ./cmd/tiktok  -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-Select the best H.265 profile or an exact height:
+Download an exact video height:
 
 ```bash
 go run ./cmd/tiktok \
-  -download \
-  -codec h265 \
   -quality 1080p \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-Print only the selected signed URL:
+Print all normalized metadata and media profiles, including signed URLs, as JSON without downloading:
 
 ```bash
-go run ./cmd/tiktok -url-only 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -json 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 TikTok's web player normally exposes playback profiles without a watermark. Some responses may also expose TikTok's official watermarked download address. Use `-watermark` to require that variant; the command returns an explicit error when TikTok does not provide it and never silently falls back to a no-watermark file.
 
-Downloads are written to a temporary file and moved into place only after completion. Existing files are preserved unless `-force` is supplied. Signed media URLs expire, so crawl the video again when an old URL stops working.
+```bash
+go run ./cmd/tiktok -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
 
 ## Livestream CLI
 

@@ -24,7 +24,7 @@ Trên Linux, cấp quyền thực thi cho cả hai file rồi chạy chúng từ
 ```bash
 chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
 ./tiktok-linux-amd64 -help
-./tiktok-linux-amd64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -33,7 +33,7 @@ Trên macOS sử dụng Apple Silicon:
 ```bash
 chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 ./tiktok-darwin-arm64 -help
-./tiktok-darwin-arm64 -download 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
 ```
 
@@ -41,7 +41,7 @@ Trên Windows, mở PowerShell tại thư mục tải xuống:
 
 ```powershell
 .\tiktok-windows-amd64.exe -help
-.\tiktok-windows-amd64.exe -download "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
 .\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
 ```
 
@@ -49,19 +49,13 @@ Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn x
 
 ## Video CLI
 
-In metadata đã chuẩn hóa cùng tất cả phiên bản media có sẵn dưới dạng JSON:
+Tải video H.264 tốt nhất hiện có không kèm watermark (hành vi mặc định):
 
 ```bash
 go run ./cmd/tiktok 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Thay `example` và `1234567890123456789` bằng username và video ID trong URL TikTok mà bạn muốn thu thập.
-
-Tải phiên bản H.264 mặc định không có watermark:
-
-```bash
-go run ./cmd/tiktok -download 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
 
 Output mẫu khi tải video không có watermark:
 
@@ -77,31 +71,33 @@ Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
 /path/to/example_1234567890123456789_no_watermark_576p_h264.mp4
 ```
 
-Tên file mặc định gồm username, video ID, loại watermark, chất lượng và codec. Sử dụng `-output` để chọn đường dẫn đích; tùy chọn này cũng tự động bật chế độ tải xuống:
+Tên file mặc định gồm username, video ID, loại watermark, chất lượng và codec. Sử dụng `-output` để chọn đường dẫn đích:
 
 ```bash
-go run ./cmd/tiktok  -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-Chọn phiên bản H.265 tốt nhất hoặc một chiều cao cụ thể:
+Tải video với một chiều cao cụ thể:
 
 ```bash
 go run ./cmd/tiktok \
-  -download \
-  -codec h265 \
   -quality 1080p \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
-Chỉ in URL có chữ ký đã được chọn:
+In toàn bộ metadata và các phiên bản media đã chuẩn hóa, bao gồm URL có chữ ký, dưới dạng JSON mà không tải video:
 
 ```bash
-go run ./cmd/tiktok -url-only 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok -json 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Trình phát web của TikTok thường cung cấp các phiên bản phát không có watermark. Một số response cũng có thể cung cấp địa chỉ tải xuống chính thức có watermark của TikTok. Sử dụng `-watermark` để yêu cầu đúng phiên bản đó; công cụ sẽ trả về lỗi rõ ràng nếu TikTok không cung cấp và không tự động chuyển sang file không có watermark.
 
-File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ được giữ nguyên trừ khi sử dụng `-force`. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
+```bash
+go run ./cmd/tiktok -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ không bao giờ bị ghi đè; hãy chọn đường dẫn `-output` khác khi cần. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
 
 ## Livestream CLI
 

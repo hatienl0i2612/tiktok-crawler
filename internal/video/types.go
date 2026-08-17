@@ -126,7 +126,6 @@ type Media struct {
 
 // SelectOptions filters media variants before the highest-resolution match is selected.
 type SelectOptions struct {
-	Codec       string
 	Quality     string
 	Watermarked bool
 }
@@ -135,7 +134,6 @@ type SelectOptions struct {
 type DownloadOptions struct {
 	OutputPath string
 	Referer    string
-	Overwrite  bool
 	Progress   func(DownloadProgress)
 }
 
