@@ -47,22 +47,6 @@ chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 
 请将示例 URL 替换为你要处理的 TikTok 视频或 LIVE 直播间。本文后续示例使用 `go run` 从源代码运行；使用发行版时，请将 `go run ./cmd/tiktok` 或 `go run ./cmd/tiktok_livestream` 替换为上表中对应的可执行文件名。
 
-## 项目结构
-
-```text
-.
-├── cmd/tiktok/                  视频 CLI 入口
-├── cmd/tiktok_livestream/       直播 CLI 入口
-├── internal/video/              视频协议、模型、选择与下载逻辑
-├── internal/livestream/         直播协议、模型与流解析逻辑
-├── go.mod
-├── README.md                    英文文档
-├── README.vi.md                 越南语文档
-└── README.zh-CN.md              简体中文文档
-```
-
-每个工具都在各自的 `main.go` 中保留入口、CLI 参数解析和输出格式化逻辑。`internal` 包仅包含 TikTok 协议请求、响应模型、媒体选择、数据解析和文件下载逻辑。
-
 ## 视频 CLI
 
 以 JSON 格式输出标准化元数据和所有可用媒体版本：

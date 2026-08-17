@@ -47,22 +47,6 @@ On Windows, open PowerShell in the download directory:
 
 Replace the example URLs with the TikTok video or LIVE room you want to process. The remaining examples use `go run` for source builds; when using a release, replace `go run ./cmd/tiktok` or `go run ./cmd/tiktok_livestream` with the downloaded executable name shown above.
 
-## Project layout
-
-```text
-.
-├── cmd/tiktok/                  Video CLI entry point
-├── cmd/tiktok_livestream/       Livestream CLI entry point
-├── internal/video/              Video protocol, models, selection, and downloader
-├── internal/livestream/         Livestream protocol, models, and stream parsing
-├── go.mod
-├── README.md                    English documentation
-├── README.vi.md                 Vietnamese documentation
-└── README.zh-CN.md              Simplified Chinese documentation
-```
-
-Each command keeps its entry point, CLI parsing, and output formatting in its own `main.go`. The `internal` packages contain only TikTok protocol requests, response models, media selection, parsing, and file downloads.
-
 ## Video CLI
 
 Print normalized metadata and all available media profiles as JSON:

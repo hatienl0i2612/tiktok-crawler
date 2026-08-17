@@ -47,22 +47,6 @@ Trên Windows, mở PowerShell tại thư mục tải xuống:
 
 Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn xử lý. Các ví dụ còn lại sử dụng `go run` để chạy từ source; khi sử dụng bản phát hành, hãy thay `go run ./cmd/tiktok` hoặc `go run ./cmd/tiktok_livestream` bằng tên executable tương ứng ở trên.
 
-## Cấu trúc dự án
-
-```text
-.
-├── cmd/tiktok/                  Entry point của Video CLI
-├── cmd/tiktok_livestream/       Entry point của Livestream CLI
-├── internal/video/              Giao thức, model, lựa chọn và tải video
-├── internal/livestream/         Giao thức, model và phân tích stream
-├── go.mod
-├── README.md                    Tài liệu tiếng Anh
-├── README.vi.md                 Tài liệu tiếng Việt
-└── README.zh-CN.md              Tài liệu tiếng Trung giản thể
-```
-
-Mỗi công cụ giữ entry point, phần phân tích tùy chọn CLI và định dạng output trong file `main.go` riêng. Các package trong `internal` chỉ chứa request giao thức TikTok, response model, lựa chọn media, phân tích dữ liệu và tải file.
-
 ## Video CLI
 
 In metadata đã chuẩn hóa cùng tất cả phiên bản media có sẵn dưới dạng JSON:
