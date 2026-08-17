@@ -1,40 +1,43 @@
 [English](README.md) | [Tiếng Việt](README.vi.md) | 简体中文
 
-# TikTok 视频与直播命令行工具
+# TikTok 视频、直播与搜索命令行工具
 
-本仓库包含两个相互独立的 Go 命令行工具：
+本仓库包含三个相互独立的 Go 命令行工具：
 
 - `tiktok` 抓取公开 TikTok 视频的元数据、列出可下载的媒体版本，并下载选定的 MP4 文件。
 - `tiktok_livestream` 获取公开 TikTok LIVE 直播间的带签名播放地址。
+- `tiktok_search` 搜索公开 TikTok 视频，并以 JSON 格式输出其标准 URL。
 
-两个工具均仅使用 Go 标准库。
+三个工具均仅使用 Go 标准库。
 
 ## 下载发行版
 
-预编译的可执行文件可从 [GitHub Releases 页面](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest)下载。请根据你的操作系统下载对应的两个文件：
+预编译的可执行文件可从 [GitHub Releases 页面](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest)下载。请根据你的操作系统下载对应文件：
 
-| 操作系统 | 视频工具 | 直播工具 |
-| --- | --- | --- |
-| Linux (amd64) | [`tiktok-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-linux-amd64) | [`tiktok_livestream-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-linux-amd64) |
-| macOS Apple Silicon (arm64) | [`tiktok-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-darwin-arm64) | [`tiktok_livestream-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-darwin-arm64) |
-| Windows (amd64) | [`tiktok-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-windows-amd64.exe) | [`tiktok_livestream-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-windows-amd64.exe) |
+| 操作系统 | 视频工具 | 直播工具 | 搜索工具 |
+| --- | --- | --- | --- |
+| Linux (amd64) | [`tiktok-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-linux-amd64) | [`tiktok_livestream-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-linux-amd64) | [`tiktok_search-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-linux-amd64) |
+| macOS Apple Silicon (arm64) | [`tiktok-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-darwin-arm64) | [`tiktok_livestream-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-darwin-arm64) | [`tiktok_search-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-darwin-arm64) |
+| Windows (amd64) | [`tiktok-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-windows-amd64.exe) | [`tiktok_livestream-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-windows-amd64.exe) | [`tiktok_search-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-windows-amd64.exe) |
 
-在 Linux 上，为两个文件添加执行权限，然后从下载目录运行：
+在 Linux 上，为这些文件添加执行权限，然后从下载目录运行：
 
 ```bash
-chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64
+chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64 tiktok_search-linux-amd64
 ./tiktok-linux-amd64 -help
 ./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
+./tiktok_search-linux-amd64 'example keyword'
 ```
 
 在使用 Apple Silicon 的 macOS 上：
 
 ```bash
-chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
+chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64 tiktok_search-darwin-arm64
 ./tiktok-darwin-arm64 -help
 ./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
 ./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
+./tiktok_search-darwin-arm64 'example keyword'
 ```
 
 在 Windows 上，在下载目录中打开 PowerShell：
@@ -43,9 +46,10 @@ chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64
 .\tiktok-windows-amd64.exe -help
 .\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
 .\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
+.\tiktok_search-windows-amd64.exe "example keyword"
 ```
 
-请将示例 URL 替换为你要处理的 TikTok 视频或 LIVE 直播间。本文后续示例使用 `go run` 从源代码运行；使用发行版时，请将 `go run ./cmd/tiktok` 或 `go run ./cmd/tiktok_livestream` 替换为上表中对应的可执行文件名。
+请将示例 URL 和搜索关键词替换为你自己的值。本文后续示例使用 `go run` 从源代码运行；使用发行版时，请将 `go run ./cmd/...` 前缀替换为上表中对应的可执行文件名。
 
 ## 视频 CLI
 
@@ -129,11 +133,45 @@ h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https:/
 go run ./cmd/tiktok_livestream -json 'https://www.tiktok.com/@example/live'
 ```
 
-对任一工具使用 `-help` 可查看所有选项。
+## 搜索 CLI
+
+按关键词搜索公开 TikTok 视频。输出始终为包含标准视频 URL 的 JSON 数组：
+
+```bash
+go run ./cmd/tiktok_search 'golang tutorial'
+```
+
+```json
+[
+  "https://www.tiktok.com/@example/video/7000000000000000001",
+  "https://www.tiktok.com/@another_example/video/7000000000000000002"
+]
+```
+
+省略关键词可请求 TikTok 默认推荐视频列表：
+
+```bash
+go run ./cmd/tiktok_search
+```
+
+`-locale` 可使用两个字母的地区代码或“语言-地区”标签来影响地区排序。该参数只是排序提示，并非代理；TikTok 仍可能使用网络和会话所在地区。
+
+```bash
+go run ./cmd/tiktok_search -locale VN 'billiards'
+go run ./cmd/tiktok_search -locale vi-VN 'billiards'
+```
+
+TikTok 当前的网页请求使用 `count`、`cursor` 和 `offset`。CLI 将其公开为每页数量和从 0 开始的页索引：
+
+```bash
+go run ./cmd/tiktok_search -page-size 20 -page-index 1 'billiards'
+```
+
+每页数量必须在 1 到 30 之间。如果 TikTok 对分页 API 请求触发验证，CLI 会在第 0 页回退到 TikTok 服务端渲染的 discovery 页面；后续页面仍需 API 可用。对任一工具使用 `-help` 可查看所有选项。
 
 ## 身份验证与地区限制
 
-公开视频和 LIVE 直播间通常无需身份验证即可使用。如果 TikTok 要求登录、年龄验证或特定地区，请通过环境变量提供你自己的 cookie：
+公开视频、LIVE 直播间和搜索通常无需身份验证即可使用。如果 TikTok 要求登录、年龄验证或交互式验证，请通过环境变量提供你自己的 cookie：
 
 ```bash
 TIKTOK_COOKIE='ttwid=...; sessionid=...' \
@@ -148,6 +186,7 @@ TIKTOK_COOKIE='ttwid=...; sessionid=...' \
 ```bash
 go build -o tiktok ./cmd/tiktok
 go build -o tiktok_livestream ./cmd/tiktok_livestream
+go build -o tiktok_search ./cmd/tiktok_search
 ```
 
 在项目根目录生成的可执行文件已被 Git 忽略。你也可以将构建结果放到 `bin/` 目录中。
