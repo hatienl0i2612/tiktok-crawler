@@ -96,7 +96,7 @@ func TestCollectStreamsDeduplicatesAndReportsMalformedCodecs(t *testing.T) {
 	}
 }
 
-func TestSelectStream(t *testing.T) {
+func TestSortStreams(t *testing.T) {
 	t.Parallel()
 
 	streams := []Stream{
@@ -105,34 +105,12 @@ func TestSelectStream(t *testing.T) {
 		{Codec: "h264", Quality: "origin", Line: "backup", Protocol: "flv", URL: "origin-h264"},
 		{Codec: "h265", Quality: "origin", Line: "main", Protocol: "hls", URL: "origin-h265"},
 	}
-
-	tests := []struct {
-		name    string
-		options SelectOptions
-		wantURL string
-	}{
-		{name: "best", options: SelectOptions{Codec: "auto", Quality: "best", Format: "auto"}, wantURL: "origin-h264"},
-		{name: "exact codec", options: SelectOptions{Codec: "h265", Quality: "best", Format: "hls"}, wantURL: "origin-h265"},
-		{name: "normalized quality", options: SelectOptions{Codec: "h264", Quality: "hd60", Format: "hls"}, wantURL: "hd60"},
-		{name: "audio only", options: SelectOptions{Codec: "h264", Quality: "ao", Format: "flv"}, wantURL: "audio"},
-	}
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			selected, err := SelectStream(streams, test.options)
-			if err != nil {
-				t.Fatalf("select stream: %v", err)
-			}
-			if selected.URL != test.wantURL {
-				t.Fatalf("selected URL = %q, want %q", selected.URL, test.wantURL)
-			}
-		})
-	}
-
-	_, err := SelectStream(streams, SelectOptions{Codec: "h265", Quality: "hd", Format: "flv"})
-	if err == nil || !strings.Contains(err.Error(), "available streams:") {
-		t.Fatalf("unexpected no-match error: %v", err)
+	sortStreams(streams)
+	want := []string{"origin-h264", "origin-h265", "hd60", "audio"}
+	for index, wantURL := range want {
+		if streams[index].URL != wantURL {
+			t.Fatalf("streams[%d].URL = %q, want %q", index, streams[index].URL, wantURL)
+		}
 	}
 }
 

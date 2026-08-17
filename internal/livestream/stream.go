@@ -98,42 +98,6 @@ func parseStreamData(encoded, defaultCodec string) ([]Stream, error) {
 	return streams, nil
 }
 
-// SelectStream returns the highest-ranked stream matching the requested filters.
-func SelectStream(streams []Stream, options SelectOptions) (*Stream, error) {
-	codec := strings.ToLower(strings.TrimSpace(options.Codec))
-	quality := strings.ToLower(strings.TrimSpace(options.Quality))
-	format := strings.ToLower(strings.TrimSpace(options.Format))
-
-	filtered := make([]Stream, 0, len(streams))
-	for _, stream := range streams {
-		if codec != "auto" && stream.Codec != codec {
-			continue
-		}
-		if format != "auto" && stream.Protocol != format {
-			continue
-		}
-		if quality != "best" && normalizeQuality(stream.Quality) != normalizeQuality(quality) {
-			continue
-		}
-		if quality != "ao" && stream.Quality == "ao" {
-			continue
-		}
-		filtered = append(filtered, stream)
-	}
-	if len(filtered) == 0 {
-		return nil, fmt.Errorf(
-			"no stream matches codec=%s quality=%s format=%s; available streams: %s",
-			codec,
-			quality,
-			format,
-			availableSummary(streams),
-		)
-	}
-	sortStreams(filtered)
-	selected := filtered[0]
-	return &selected, nil
-}
-
 func sortStreams(streams []Stream) {
 	sort.SliceStable(streams, func(i, j int) bool {
 		left, right := streams[i], streams[j]
@@ -194,23 +158,6 @@ func lineRank(line string) int {
 	default:
 		return 2
 	}
-}
-
-func availableSummary(streams []Stream) string {
-	seen := make(map[string]bool)
-	values := make([]string, 0, len(streams))
-	for _, stream := range streams {
-		value := stream.Codec + "/" + stream.Quality + "/" + stream.Protocol
-		if seen[value] {
-			continue
-		}
-		seen[value] = true
-		values = append(values, value)
-	}
-	if len(values) > 12 {
-		values = append(values[:12], "...")
-	}
-	return strings.Join(values, ", ")
 }
 
 type sdkMetadata map[string]any

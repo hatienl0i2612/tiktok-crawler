@@ -105,7 +105,7 @@ Downloads are written to a temporary file and moved into place only after comple
 
 ## Livestream CLI
 
-Print the best available stream URL, preferring H.264 and HLS when that combination is available:
+Resolve a LIVE room and print every available stream as a table:
 
 ```bash
 go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live'
@@ -113,48 +113,24 @@ go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live'
 
 Replace `example` with the TikTok username of the LIVE channel you want to resolve.
 
-Use `-all` to print every available stream as a table:
-
-```bash
-go run ./cmd/tiktok_livestream -all 'https://www.tiktok.com/@example/live'
-```
-
 Sample output for an active LIVE room:
 
 ```text
 CODEC  QUALITY  LINE  FORMAT  RESOLUTION  BITRATE  EXPIRES               URL
-h264   origin   main  hls     1920x1080   9200000  2026-08-27T17:03:10Z  https://pull-hls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608.m3u8?expire=1787850190&sign=20758f803a9842b0ae05952d6c0777ed
-h264   origin   main  flv     1920x1080   9200000  2026-08-27T17:03:10Z  https://pull-flv-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608.flv?expire=1787850190&sign=5c67c75a32a647024ec7653bb8499a85
-h264   origin   main  lls     1920x1080   9200000  2026-08-27T17:03:10Z  https://pull-lls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608.sdp?expire=1787850190&sign=c761bdc232b17ee63db64e348b5a4695
-h264   hd       main  hls     1280x720    1800000  2026-08-27T17:03:10Z  https://pull-hls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd.m3u8?expire=1787850190&sign=07f4c9daacbc59e003f43b9db09d9592
-h264   hd       main  flv     1280x720    1800000  2026-08-27T17:03:10Z  https://pull-flv-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd.flv?expire=1787850190&sign=3526c3298b218eefa80fd106cfb56616
-h264   hd       main  lls     1280x720    1800000  2026-08-27T17:03:10Z  https://pull-lls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd.sdp?expire=1787850190&sign=3d744a41b11ef635a08fcca5bd42a725
-h265   hd       main  hls     1280x720    1350000  2026-08-27T17:03:10Z  https://pull-hls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd5.m3u8?expire=1787850190&sign=5ada1b09e0a210426677f35ffc457dbc
-h265   hd       main  flv     1280x720    1350000  2026-08-27T17:03:10Z  https://pull-flv-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd5.flv?expire=1787850190&sign=606a4658c7049da9503b194506518766
-h265   hd       main  lls     1280x720    1350000  2026-08-27T17:03:10Z  https://pull-lls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_hd5.sdp?expire=1787850190&sign=2fa5a816794b57abfebbfde08b7b5cfa
-h265   sd       main  hls     960x540     1000000  2026-08-27T17:03:10Z  https://pull-hls-l11-sg01.tiktokcdn.com/game/stream-2137512010433429608_sd5.m3u8?expire=1787850190&sign=ff0572d0ead13dcbe7c64546f8eff072
-```
-
-Play the selected stream with [mpv](https://mpv.io/installation/), the recommended media player for these livestream URLs:
-
-```bash
-mpv "$(go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live')"
+h265   origin   main  hls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.m3u8?expire=1788176198&sign=ab662553d3d43198f00eee6ff79263c0
+h265   origin   main  flv     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.flv?expire=1788176198&sign=ce30a95c277094da2bb81d4d0e7662e0
+h265   origin   main  cmaf    1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.mpd?expire=1788176198&sign=f1e862ed8613e60ba0ad665fd0ab2cb4
+h265   origin   main  lls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.sdp?expire=1788176198&sign=4efcf378b009c553ec62a120b3b39e8c
+h265   uhd_60   main  hls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.m3u8?expire=1788176198&sign=0c33a22df71b89308ad48b8142e1606e
+h265   uhd_60   main  flv     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.flv?expire=1788176198&sign=f393522bdabef8d7ef0c25500b71ef2d
+h265   uhd_60   main  cmaf    1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.mpd?expire=1788176198&sign=971ff4d9cfb652918867b2ae6443c923
+h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.sdp?expire=1788176198&sign=6bd520bc35d399aa15e9cc7743f345b2
 ```
 
 Print complete room metadata as JSON:
 
 ```bash
 go run ./cmd/tiktok_livestream -json 'https://www.tiktok.com/@example/live'
-```
-
-Select an original H.265 HLS stream:
-
-```bash
-go run ./cmd/tiktok_livestream \
-  -codec h265 \
-  -quality origin \
-  -format hls \
-  'https://www.tiktok.com/@example/live'
 ```
 
 Use `-help` on either command to view all options.

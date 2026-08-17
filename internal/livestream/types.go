@@ -55,10 +55,3 @@ type Stream struct {
 	CDN        string     `json:"cdn,omitempty"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
-
-// SelectOptions filters the stream list before the best matching stream is chosen.
-type SelectOptions struct {
-	Codec   string
-	Quality string
-	Format  string
-}
