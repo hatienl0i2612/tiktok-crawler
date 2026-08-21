@@ -1,62 +1,57 @@
 English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
-# TikTok Video, Livestream, and Search CLIs
+# TikTok Crawler
 
-This repository contains three independent Go command-line tools:
+This repository contains one Go command-line tool:
 
-- `tiktok` crawls public TikTok video metadata, lists downloadable media profiles, and downloads a selected MP4 file.
-- `tiktok_livestream` resolves signed playback URLs for a public TikTok LIVE room.
-- `tiktok_search` searches public TikTok videos and prints their canonical URLs as JSON.
+- `tiktok_crawler` detects the URL type, downloads public TikTok videos, and resolves signed playback URLs for public TikTok LIVE rooms.
 
-All commands use only the Go standard library.
+Both commands use only the Go standard library.
 
 ## Download a release
 
-Prebuilt binaries are available on the [GitHub Releases page](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest). Download the files that match your operating system:
+Prebuilt binaries are available on the [GitHub Releases page](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest). Download the file that matches your operating system:
 
-| Operating system | Video CLI | Livestream CLI | Search CLI |
-| --- | --- | --- | --- |
-| Linux (amd64) | [`tiktok-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-linux-amd64) | [`tiktok_livestream-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-linux-amd64) | [`tiktok_search-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-linux-amd64) |
-| macOS Apple Silicon (arm64) | [`tiktok-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-darwin-arm64) | [`tiktok_livestream-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-darwin-arm64) | [`tiktok_search-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-darwin-arm64) |
-| Windows (amd64) | [`tiktok-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-windows-amd64.exe) | [`tiktok_livestream-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-windows-amd64.exe) | [`tiktok_search-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-windows-amd64.exe) |
+| Operating system | Binary |
+| --- | --- |
+| Linux (amd64) | [`tiktok_crawler-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-linux-amd64) |
+| macOS Apple Silicon (arm64) | [`tiktok_crawler-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-darwin-arm64) |
+| Windows (amd64) | [`tiktok_crawler-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-windows-amd64.exe) |
 
-On Linux, make the files executable and run them from the download directory:
+On Linux, make both files executable and run them from the download directory:
 
 ```bash
-chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64 tiktok_search-linux-amd64
-./tiktok-linux-amd64 -help
-./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
-./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
-./tiktok_search-linux-amd64 'example keyword'
+chmod +x tiktok_crawler-linux-amd64
+./tiktok_crawler-linux-amd64 -help
+./tiktok_crawler-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_crawler-linux-amd64 'https://www.tiktok.com/@example/live'
 ```
 
 On macOS with Apple Silicon:
 
 ```bash
-chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64 tiktok_search-darwin-arm64
-./tiktok-darwin-arm64 -help
-./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
-./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
-./tiktok_search-darwin-arm64 'example keyword'
+chmod +x tiktok_crawler-darwin-arm64
+./tiktok_crawler-darwin-arm64 -help
+./tiktok_crawler-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_crawler-darwin-arm64 'https://www.tiktok.com/@example/live'
 ```
 
 On Windows, open PowerShell in the download directory:
 
 ```powershell
-.\tiktok-windows-amd64.exe -help
-.\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
-.\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
-.\tiktok_search-windows-amd64.exe "example keyword"
+.\tiktok_crawler-windows-amd64.exe -help
+.\tiktok_crawler-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok_crawler-windows-amd64.exe "https://www.tiktok.com/@example/live"
 ```
 
-Replace the example URLs and search keyword with your own values. The remaining examples use `go run` for source builds; when using a release, replace the `go run ./cmd/...` prefix with the downloaded executable name shown above.
+Replace the example URLs with the TikTok video or LIVE room you want to process. The remaining examples use `go run` for source builds; when using a release, replace `go run ./cmd/tiktok_crawler` with the downloaded executable name shown above.
 
-## Video CLI
+## Videos
 
 Download the best available H.264 video without a watermark (the default behavior):
 
 ```bash
-go run ./cmd/tiktok 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Replace `example` and `1234567890123456789` with the username and video ID from the TikTok URL you want to crawl.
@@ -78,13 +73,13 @@ Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
 The default filename includes the username, video ID, watermark type, quality, and codec. Use `-output` to choose a destination:
 
 ```bash
-go run ./cmd/tiktok -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Download an exact video height:
 
 ```bash
-go run ./cmd/tiktok \
+go run ./cmd/tiktok_crawler \
   -quality 1080p \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
@@ -92,23 +87,23 @@ go run ./cmd/tiktok \
 Print all normalized metadata and media profiles, including signed URLs, as JSON without downloading:
 
 ```bash
-go run ./cmd/tiktok -json 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 TikTok's web player normally exposes playback profiles without a watermark. Some responses may also expose TikTok's official watermarked download address. Use `-watermark` to require that variant; the command returns an explicit error when TikTok does not provide it and never silently falls back to a no-watermark file.
 
 ```bash
-go run ./cmd/tiktok -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
 
-## Livestream CLI
+## Livestreams
 
 Resolve a LIVE room and print every available stream as a table:
 
 ```bash
-go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live'
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
 ```
 
 Replace `example` with the TikTok username of the LIVE channel you want to resolve.
@@ -130,52 +125,16 @@ h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https:/
 Print complete room metadata as JSON:
 
 ```bash
-go run ./cmd/tiktok_livestream -json 'https://www.tiktok.com/@example/live'
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
 ```
-
-## Search CLI
-
-Search public TikTok videos by keyword. The output is always a JSON array of canonical video URLs:
-
-```bash
-go run ./cmd/tiktok_search 'golang tutorial'
-```
-
-```json
-[
-  "https://www.tiktok.com/@example/video/7000000000000000001",
-  "https://www.tiktok.com/@another_example/video/7000000000000000002"
-]
-```
-
-Omit the keyword to request TikTok's default recommended video list:
-
-```bash
-go run ./cmd/tiktok_search
-```
-
-Use `-locale` with a two-letter region or a language-region tag to influence regional ranking. This is a ranking hint, not a proxy; TikTok may still apply the network and session region.
-
-```bash
-go run ./cmd/tiktok_search -locale VN 'billiards'
-go run ./cmd/tiktok_search -locale vi-VN 'billiards'
-```
-
-TikTok's current web request uses `count`, `cursor`, and `offset`. The CLI exposes them as a page size and a zero-based page index:
-
-```bash
-go run ./cmd/tiktok_search -page-size 20 -page-index 1 'billiards'
-```
-
-The page size must be between 1 and 30. If TikTok challenges the paginated API request, the CLI falls back to TikTok's server-rendered discovery page for page index 0; later pages still require API access. Use `-help` on any command to view all options.
 
 ## Authentication and regional restrictions
 
-Public videos, live rooms, and searches usually work without authentication. If TikTok requires login, age verification, or an interactive verification challenge, provide your own cookie through the environment:
+Public videos and live rooms usually work without authentication. If TikTok requires login, age verification, or a specific region, provide your own cookie through the environment:
 
 ```bash
 TIKTOK_COOKIE='ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok \
+  go run ./cmd/tiktok_crawler \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
@@ -184,9 +143,7 @@ Do not commit cookies to source control. Each client keeps cookies received from
 ## Build
 
 ```bash
-go build -o tiktok ./cmd/tiktok
-go build -o tiktok_livestream ./cmd/tiktok_livestream
-go build -o tiktok_search ./cmd/tiktok_search
+go build -o tiktok_crawler ./cmd/tiktok_crawler
 ```
 
 The generated root binaries are ignored by Git. You can also place builds under `bin/`.

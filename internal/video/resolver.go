@@ -455,7 +455,9 @@ func extractDownloadURLs(body []byte) []string {
 	}
 	var result []string
 	walkDownloadFields(value, false, &result)
-	return uniqueStrings(result)
+	result = uniqueStrings(result)
+	sort.Strings(result)
+	return result
 }
 
 func walkDownloadFields(value any, collect bool, result *[]string) {

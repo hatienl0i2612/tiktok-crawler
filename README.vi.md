@@ -1,62 +1,57 @@
 [English](README.md) | Tiếng Việt | [简体中文](README.zh-CN.md)
 
-# Công cụ dòng lệnh TikTok Video, Livestream và Search
+# TikTok Crawler
 
-Repository này cung cấp ba công cụ dòng lệnh Go độc lập:
+Repository này cung cấp một công cụ dòng lệnh Go:
 
-- `tiktok` thu thập metadata của video TikTok công khai, liệt kê các phiên bản media có thể tải xuống và tải file MP4 đã chọn.
-- `tiktok_livestream` lấy các URL phát có chữ ký cho một phòng TikTok LIVE công khai.
-- `tiktok_search` tìm kiếm video TikTok công khai và in các URL chuẩn dưới dạng JSON.
+- `tiktok_crawler` tự nhận diện loại URL, tải video TikTok công khai và lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
-Cả ba công cụ chỉ sử dụng thư viện chuẩn của Go.
+Công cụ chỉ sử dụng thư viện chuẩn của Go.
 
 ## Tải bản phát hành
 
-Các binary được build sẵn có trên [trang GitHub Releases](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest). Hãy tải các file phù hợp với hệ điều hành của bạn:
+Các binary được build sẵn có trên [trang GitHub Releases](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest). Hãy tải file phù hợp với hệ điều hành của bạn:
 
-| Hệ điều hành | Video CLI | Livestream CLI | Search CLI |
-| --- | --- | --- | --- |
-| Linux (amd64) | [`tiktok-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-linux-amd64) | [`tiktok_livestream-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-linux-amd64) | [`tiktok_search-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-linux-amd64) |
-| macOS Apple Silicon (arm64) | [`tiktok-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-darwin-arm64) | [`tiktok_livestream-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-darwin-arm64) | [`tiktok_search-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-darwin-arm64) |
-| Windows (amd64) | [`tiktok-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok-windows-amd64.exe) | [`tiktok_livestream-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_livestream-windows-amd64.exe) | [`tiktok_search-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_search-windows-amd64.exe) |
+| Hệ điều hành | Binary |
+| --- | --- |
+| Linux (amd64) | [`tiktok_crawler-linux-amd64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-linux-amd64) |
+| macOS Apple Silicon (arm64) | [`tiktok_crawler-darwin-arm64`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-darwin-arm64) |
+| Windows (amd64) | [`tiktok_crawler-windows-amd64.exe`](https://github.com/hatienl0i2612/tiktok-crawler/releases/latest/download/tiktok_crawler-windows-amd64.exe) |
 
-Trên Linux, cấp quyền thực thi cho các file rồi chạy chúng từ thư mục tải xuống:
+Trên Linux, cấp quyền thực thi rồi chạy file từ thư mục tải xuống:
 
 ```bash
-chmod +x tiktok-linux-amd64 tiktok_livestream-linux-amd64 tiktok_search-linux-amd64
-./tiktok-linux-amd64 -help
-./tiktok-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
-./tiktok_livestream-linux-amd64 'https://www.tiktok.com/@example/live'
-./tiktok_search-linux-amd64 'example keyword'
+chmod +x tiktok_crawler-linux-amd64
+./tiktok_crawler-linux-amd64 -help
+./tiktok_crawler-linux-amd64 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_crawler-linux-amd64 'https://www.tiktok.com/@example/live'
 ```
 
 Trên macOS sử dụng Apple Silicon:
 
 ```bash
-chmod +x tiktok-darwin-arm64 tiktok_livestream-darwin-arm64 tiktok_search-darwin-arm64
-./tiktok-darwin-arm64 -help
-./tiktok-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
-./tiktok_livestream-darwin-arm64 'https://www.tiktok.com/@example/live'
-./tiktok_search-darwin-arm64 'example keyword'
+chmod +x tiktok_crawler-darwin-arm64
+./tiktok_crawler-darwin-arm64 -help
+./tiktok_crawler-darwin-arm64 'https://www.tiktok.com/@example/video/1234567890123456789'
+./tiktok_crawler-darwin-arm64 'https://www.tiktok.com/@example/live'
 ```
 
 Trên Windows, mở PowerShell tại thư mục tải xuống:
 
 ```powershell
-.\tiktok-windows-amd64.exe -help
-.\tiktok-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
-.\tiktok_livestream-windows-amd64.exe "https://www.tiktok.com/@example/live"
-.\tiktok_search-windows-amd64.exe "example keyword"
+.\tiktok_crawler-windows-amd64.exe -help
+.\tiktok_crawler-windows-amd64.exe "https://www.tiktok.com/@example/video/1234567890123456789"
+.\tiktok_crawler-windows-amd64.exe "https://www.tiktok.com/@example/live"
 ```
 
-Thay các URL và từ khóa ví dụ bằng giá trị của bạn. Các ví dụ còn lại sử dụng `go run` để chạy từ source; khi sử dụng bản phát hành, hãy thay phần `go run ./cmd/...` bằng tên executable tương ứng ở trên.
+Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn xử lý. Các ví dụ còn lại sử dụng `go run` để chạy từ source; khi sử dụng bản phát hành, hãy thay `go run ./cmd/tiktok_crawler` bằng executable ở trên.
 
-## Video CLI
+## Video
 
 Tải video H.264 tốt nhất hiện có không kèm watermark (hành vi mặc định):
 
 ```bash
-go run ./cmd/tiktok 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Thay `example` và `1234567890123456789` bằng username và video ID trong URL TikTok mà bạn muốn thu thập.
@@ -78,13 +73,13 @@ Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
 Tên file mặc định gồm username, video ID, loại watermark, chất lượng và codec. Sử dụng `-output` để chọn đường dẫn đích:
 
 ```bash
-go run ./cmd/tiktok -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Tải video với một chiều cao cụ thể:
 
 ```bash
-go run ./cmd/tiktok \
+go run ./cmd/tiktok_crawler \
   -quality 1080p \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
@@ -92,23 +87,23 @@ go run ./cmd/tiktok \
 In toàn bộ metadata và các phiên bản media đã chuẩn hóa, bao gồm URL có chữ ký, dưới dạng JSON mà không tải video:
 
 ```bash
-go run ./cmd/tiktok -json 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Trình phát web của TikTok thường cung cấp các phiên bản phát không có watermark. Một số response cũng có thể cung cấp địa chỉ tải xuống chính thức có watermark của TikTok. Sử dụng `-watermark` để yêu cầu đúng phiên bản đó; công cụ sẽ trả về lỗi rõ ràng nếu TikTok không cung cấp và không tự động chuyển sang file không có watermark.
 
 ```bash
-go run ./cmd/tiktok -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
+go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ không bao giờ bị ghi đè; hãy chọn đường dẫn `-output` khác khi cần. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
 
-## Livestream CLI
+## Livestream
 
 Lấy thông tin một phòng LIVE và in tất cả stream hiện có dưới dạng bảng:
 
 ```bash
-go run ./cmd/tiktok_livestream 'https://www.tiktok.com/@example/live'
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
 ```
 
 Thay `example` bằng username TikTok của kênh LIVE mà bạn muốn lấy stream.
@@ -130,52 +125,16 @@ h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https:/
 In toàn bộ metadata của phòng dưới dạng JSON:
 
 ```bash
-go run ./cmd/tiktok_livestream -json 'https://www.tiktok.com/@example/live'
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
 ```
-
-## Search CLI
-
-Tìm kiếm video TikTok công khai theo từ khóa. Output luôn là một JSON array chứa các URL video chuẩn:
-
-```bash
-go run ./cmd/tiktok_search 'golang tutorial'
-```
-
-```json
-[
-  "https://www.tiktok.com/@example/video/7000000000000000001",
-  "https://www.tiktok.com/@another_example/video/7000000000000000002"
-]
-```
-
-Không truyền từ khóa để yêu cầu danh sách video đề xuất mặc định của TikTok:
-
-```bash
-go run ./cmd/tiktok_search
-```
-
-Sử dụng `-locale` với mã khu vực gồm hai chữ cái hoặc thẻ ngôn ngữ-khu vực để tác động đến thứ tự kết quả. Đây chỉ là gợi ý xếp hạng, không phải proxy; TikTok vẫn có thể áp dụng khu vực của mạng và session.
-
-```bash
-go run ./cmd/tiktok_search -locale VN 'billiards'
-go run ./cmd/tiktok_search -locale vi-VN 'billiards'
-```
-
-Request web hiện tại của TikTok sử dụng `count`, `cursor` và `offset`. CLI cung cấp chúng dưới dạng kích thước trang và chỉ số trang bắt đầu từ 0:
-
-```bash
-go run ./cmd/tiktok_search -page-size 20 -page-index 1 'billiards'
-```
-
-Kích thước trang phải nằm trong khoảng từ 1 đến 30. Nếu TikTok yêu cầu xác minh đối với API phân trang, CLI sẽ fallback sang trang discovery được TikTok render phía server cho page index 0; các trang sau vẫn cần truy cập được API. Sử dụng `-help` với bất kỳ công cụ nào để xem tất cả tùy chọn.
 
 ## Xác thực và giới hạn khu vực
 
-Video, phòng LIVE và kết quả tìm kiếm công khai thường hoạt động mà không cần xác thực. Nếu TikTok yêu cầu đăng nhập, xác minh độ tuổi hoặc một bước xác minh tương tác, hãy cung cấp cookie của riêng bạn qua biến môi trường:
+Video và phòng LIVE công khai thường hoạt động mà không cần xác thực. Nếu TikTok yêu cầu đăng nhập, xác minh độ tuổi hoặc một khu vực cụ thể, hãy cung cấp cookie của riêng bạn qua biến môi trường:
 
 ```bash
 TIKTOK_COOKIE='ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok \
+  go run ./cmd/tiktok_crawler \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
@@ -184,9 +143,7 @@ Không commit cookie vào source control. Mỗi client lưu các cookie nhận �
 ## Build từ source
 
 ```bash
-go build -o tiktok ./cmd/tiktok
-go build -o tiktok_livestream ./cmd/tiktok_livestream
-go build -o tiktok_search ./cmd/tiktok_search
+go build -o tiktok_crawler ./cmd/tiktok_crawler
 ```
 
 Các binary được tạo tại thư mục gốc đã được Git bỏ qua. Bạn cũng có thể đặt chúng trong thư mục `bin/`.

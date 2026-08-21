@@ -189,7 +189,7 @@ func TestExtractDownloadURLs(t *testing.T) {
 		"playAddr": "https://v16.tiktokcdn.com/not-a-download.mp4"
 	}`)
 	urls := extractDownloadURLs(body)
-	if len(urls) != 2 || urls[0] != "https://v16.tiktokcdn.com/a.mp4" || urls[1] != "https://api.tiktokv.com/b.mp4" {
+	if len(urls) != 2 || urls[0] != "https://api.tiktokv.com/b.mp4" || urls[1] != "https://v16.tiktokcdn.com/a.mp4" {
 		t.Fatalf("unexpected download URLs: %v", urls)
 	}
 	html := append([]byte(`<script>not JSON</script><script type="application/json">`), body...)
