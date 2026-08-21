@@ -7,9 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -17,22 +15,28 @@ import (
 	"time"
 
 	"tiktok-crawler/internal/cliargs"
+	"tiktok-crawler/internal/downloader"
 	"tiktok-crawler/internal/livestream"
+	"tiktok-crawler/internal/media"
+	"tiktok-crawler/internal/shortdrama"
+	"tiktok-crawler/internal/tiktok"
 	"tiktok-crawler/internal/video"
 )
 
 const videoRequestTimeout = 5 * time.Minute
 
 var (
-	livePathPattern  = regexp.MustCompile(`^/@[^/]+/live/?$`)
-	videoPathPattern = regexp.MustCompile(`^/@[^/]+/video/[0-9]+/?$`)
+	livePathPattern       = regexp.MustCompile(`^/@[^/]+/live/?$`)
+	videoPathPattern      = regexp.MustCompile(`^/@[^/]+/video/[0-9]+/?$`)
+	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
 )
 
 type contentType string
 
 const (
-	contentTypeLive  contentType = "live"
-	contentTypeVideo contentType = "video"
+	contentTypeLive       contentType = "live"
+	contentTypeVideo      contentType = "video"
+	contentTypeShortDrama contentType = "short_drama"
 )
 
 type options struct {
@@ -67,6 +71,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch options.content {
 	case contentTypeVideo:
 		return runVideo(options, stdout, stderr)
+	case contentTypeShortDrama:
+		return runShortDrama(options, stdout, stderr)
 	case contentTypeLive:
 		return runLive(options, stdout, stderr)
 	default:
@@ -78,7 +84,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var options options
 	flags := flag.NewFlagSet("tiktok_crawler", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&options.inputURL, "url", "", "TikTok video or LIVE URL (may also be supplied as the final argument)")
+	flags.StringVar(&options.inputURL, "url", "", "TikTok video, Short Drama episode, or LIVE URL (may also be supplied as the final argument)")
 	flags.BoolVar(&options.json, "json", false, "print resolved metadata as JSON")
 	flags.StringVar(&options.output, "output", "", "video download destination (ignored for LIVE URLs)")
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for LIVE URLs)")
@@ -88,7 +94,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&options.userAgent, "user-agent", livestream.DefaultUserAgent, "User-Agent sent to TikTok LIVE (ignored for video URLs)")
 	flags.DurationVar(&options.timeout, "timeout", 20*time.Second, "LIVE request timeout (ignored for video URLs)")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
+		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
 		flags.PrintDefaults()
 	}
 
@@ -98,7 +104,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	if options.inputURL == "" {
 		if flags.NArg() != 1 {
 			flags.Usage()
-			return options, errors.New("exactly one TikTok video or LIVE URL is required")
+			return options, errors.New("exactly one TikTok video, Short Drama episode, or LIVE URL is required")
 		}
 		options.inputURL = flags.Arg(0)
 	} else if flags.NArg() != 0 {
@@ -114,11 +120,11 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		options.cookie = os.Getenv("TIKTOK_COOKIE")
 	}
 
-	if options.content == contentTypeVideo {
+	if isDownloadableContent(options.content) {
 		options.quality = strings.ToLower(strings.TrimSpace(options.quality))
 		options.output = strings.TrimSpace(options.output)
 		if options.json && (options.output != "" || options.watermark || options.quality != "best") {
-			return options, errors.New("-json cannot be combined with -output, -watermark, or a custom -quality for video URLs")
+			return options, errors.New("-json cannot be combined with -output, -watermark, or a custom -quality for downloadable URLs")
 		}
 		if options.quality != "best" {
 			height, parseErr := strconv.Atoi(strings.TrimSuffix(options.quality, "p"))
@@ -133,22 +139,24 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 }
 
 func detectContentType(rawURL string) (contentType, error) {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
+	parsed, err := tiktok.ParseURL(rawURL)
+	if err != nil {
 		return "", fmt.Errorf("invalid TikTok URL %q", rawURL)
-	}
-	host := strings.ToLower(parsed.Hostname())
-	if host != "tiktok.com" && !strings.HasSuffix(host, ".tiktok.com") {
-		return "", fmt.Errorf("URL must use a tiktok.com host: %q", rawURL)
 	}
 	switch {
 	case livePathPattern.MatchString(parsed.EscapedPath()):
 		return contentTypeLive, nil
 	case videoPathPattern.MatchString(parsed.EscapedPath()):
 		return contentTypeVideo, nil
+	case shortDramaPathPattern.MatchString(parsed.EscapedPath()):
+		return contentTypeShortDrama, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
+}
+
+func isDownloadableContent(content contentType) bool {
+	return content == contentTypeVideo || content == contentTypeShortDrama
 }
 
 func runVideo(options options, stdout, stderr io.Writer) error {
@@ -164,16 +172,54 @@ func runVideo(options options, stdout, stderr io.Writer) error {
 		return err
 	}
 	if options.json {
-		return printVideoJSON(stdout, result)
+		return printJSON(stdout, result)
 	}
+	return downloadVideo(ctx, client.Session(), downloader.FileInfo{
+		Author:  result.Video.Author.UniqueID,
+		VideoID: result.Video.ID,
+		Referer: result.FinalURL,
+	}, result.Media, options, stdout, stderr)
+}
+
+func runShortDrama(options options, stdout, stderr io.Writer) error {
+	client, err := shortdrama.NewClient(shortdrama.ClientOptions{Cookie: options.cookie})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), videoRequestTimeout)
+	defer cancel()
+
+	result, err := client.Resolve(ctx, options.inputURL)
+	if err != nil {
+		return err
+	}
+	if options.json {
+		return printJSON(stdout, result)
+	}
+	return downloadVideo(ctx, client.Session(), downloader.FileInfo{
+		Author:  result.Video.Author.UniqueID,
+		VideoID: result.Video.ID,
+		Referer: result.FinalURL,
+	}, result.Media, options, stdout, stderr)
+}
+
+func downloadVideo(
+	ctx context.Context,
+	session *tiktok.Session,
+	file downloader.FileInfo,
+	variants []media.Variant,
+	options options,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
 	progress := newProgressDisplay(stderr)
-	download, err := client.DownloadResolved(ctx, result, video.ResolvedDownloadOptions{
+	download, err := downloader.Download(ctx, session, variants, file, downloader.Options{
 		OutputPath:  options.output,
 		Quality:     options.quality,
 		Watermarked: options.watermark,
 		Progress:    progress.update,
-		OnStart: func(start video.DownloadStart) {
-			progress.start(start.Result, start.Media, start.OutputPath)
+		OnStart: func(start downloader.DownloadStart) {
+			progress.start(file.Author, file.VideoID, start.Media, start.OutputPath)
 		},
 	})
 	if err != nil {
@@ -198,30 +244,26 @@ func runLive(options options, stdout, stderr io.Writer) error {
 		return err
 	}
 	if options.verbose {
-		printSummary(stderr, result)
+		if err := printSummary(stderr, result); err != nil {
+			return err
+		}
 	}
 	if options.json {
-		return printLiveJSON(stdout, result)
+		return printJSON(stdout, result)
 	}
 	return printStreams(stdout, result.Streams)
 }
 
-func printVideoJSON(writer io.Writer, result *video.Result) error {
+func printJSON(writer io.Writer, result any) error {
 	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
 }
 
-func printLiveJSON(writer io.Writer, result *livestream.Result) error {
-	encoder := json.NewEncoder(writer)
-	encoder.SetEscapeHTML(false)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
-}
-
-func printSummary(writer io.Writer, result *livestream.Result) {
-	fmt.Fprintf(writer, "@%s | %s | room=%s | viewers=%d | source=%s\n", result.User.UniqueID, result.User.Nickname, result.User.RoomID, result.Live.ViewerCount, result.Source)
+func printSummary(writer io.Writer, result *livestream.Result) error {
+	_, err := fmt.Fprintf(writer, "@%s | %s | room=%s | viewers=%d | source=%s\n", result.User.UniqueID, result.User.Nickname, result.User.RoomID, result.Live.ViewerCount, result.Source)
+	return err
 }
 
 func printStreams(writer io.Writer, streams []livestream.Stream) error {
@@ -248,31 +290,26 @@ type progressDisplay struct {
 
 func newProgressDisplay(writer io.Writer) *progressDisplay { return &progressDisplay{writer: writer} }
 
-func (display *progressDisplay) start(result *video.Result, media *video.Media, outputPath string) {
-	absolutePath, err := filepath.Abs(outputPath)
-	if err != nil {
-		absolutePath = outputPath
-	}
-	username := result.Video.Author.UniqueID
+func (display *progressDisplay) start(username, videoID string, variant *media.Variant, outputPath string) {
 	if username == "" {
 		username = "unknown"
 	}
-	variant := "No watermark"
-	if media.Watermarked {
-		variant = "TikTok watermark"
+	watermark := "No watermark"
+	if variant.Watermarked {
+		watermark = "TikTok watermark"
 	}
-	details := []string{variant, displayCodec(media.Codec), media.Quality}
-	if media.Width > 0 && media.Height > 0 {
-		details = append(details, fmt.Sprintf("%dx%d", media.Width, media.Height))
+	details := []string{watermark, displayCodec(variant.Codec), variant.Quality}
+	if variant.Width > 0 && variant.Height > 0 {
+		details = append(details, fmt.Sprintf("%dx%d", variant.Width, variant.Height))
 	}
-	if media.Size > 0 {
-		details = append(details, formatBytes(media.Size))
+	if variant.Size > 0 {
+		details = append(details, formatBytes(variant.Size))
 	}
 	fmt.Fprintln(display.writer, "Downloading TikTok video")
-	fmt.Fprintf(display.writer, "  Author:  @%s\n  Video:   %s\n  Media:   %s\n  Output:  %s\n", username, result.Video.ID, strings.Join(details, " | "), absolutePath)
+	fmt.Fprintf(display.writer, "  Author:  @%s\n  Video:   %s\n  Media:   %s\n  Output:  %s\n", username, videoID, strings.Join(details, " | "), outputPath)
 }
 
-func (display *progressDisplay) update(progress video.DownloadProgress) {
+func (display *progressDisplay) update(progress downloader.DownloadProgress) {
 	now := time.Now()
 	if display.startedAt.IsZero() || progress.DownloadedBytes < display.lastBytes {
 		display.startedAt, display.lastRendered = now, time.Time{}
@@ -286,7 +323,7 @@ func (display *progressDisplay) update(progress video.DownloadProgress) {
 	display.render(progress, now)
 }
 
-func (display *progressDisplay) render(progress video.DownloadProgress, now time.Time) {
+func (display *progressDisplay) render(progress downloader.DownloadProgress, now time.Time) {
 	elapsed := now.Sub(display.startedAt)
 	bytesPerSecond := float64(0)
 	if elapsed > 0 {
@@ -319,7 +356,7 @@ func (display *progressDisplay) render(progress video.DownloadProgress, now time
 	display.lastWidth, display.lineVisible = len(line), true
 }
 
-func (display *progressDisplay) complete(result *video.DownloadResult) {
+func (display *progressDisplay) complete(result *downloader.DownloadResult) {
 	display.stop()
 	elapsed := time.Since(display.startedAt)
 	if display.startedAt.IsZero() {

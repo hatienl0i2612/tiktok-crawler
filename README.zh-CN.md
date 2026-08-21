@@ -4,7 +4,7 @@
 
 本仓库包含一个 Go 命令行工具：
 
-- `tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频，或获取公开 TikTok LIVE 直播间的带签名播放地址。
+- `tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
 
 该工具仅使用 Go 标准库。
 
@@ -48,7 +48,7 @@ chmod +x tiktok_crawler-darwin-arm64
 
 ## 视频
 
-下载当前最佳的 H.264 无水印视频（默认行为）：
+下载当前质量最佳的无水印视频（默认行为）：
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
@@ -97,6 +97,18 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 下载内容会先写入临时文件，仅在完成后移动到目标路径。已有文件永远不会被覆盖；必要时请选择其他 `-output` 路径。带签名媒体 URL 会过期，因此旧 URL 失效后请重新抓取视频。
+
+## 短剧剧集
+
+短剧剧集 URL 使用与普通视频相同的选项，并默认开始下载：
+
+```bash
+TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
+  go run ./cmd/tiktok_crawler \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok 允许公开获取剧集元数据，但目前要求使用浏览器会话中的有效 `msToken` 请求带签名的播放元数据。请将你自己的 TikTok cookie 传入 `TIKTOK_COOKIE`；工具会在本地生成 `X-Bogus`，不会将 cookie 写入磁盘。`-json`、`-output` 和 `-quality` 与普通视频的行为相同。
 
 ## 直播
 

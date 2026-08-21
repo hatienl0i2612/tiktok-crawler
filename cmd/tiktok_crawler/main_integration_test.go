@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"tiktok-crawler/internal/livestream"
+	"tiktok-crawler/internal/shortdrama"
 	"tiktok-crawler/internal/video"
 )
 
@@ -69,5 +70,33 @@ func TestRunLiveJSONIntegration(t *testing.T) {
 	}
 	if result.InputURL != inputURL || !strings.EqualFold(result.User.UniqueID, "weathernewslive") || !result.Live.IsLive || len(result.Streams) == 0 {
 		t.Fatalf("unexpected LIVE result: %+v", result)
+	}
+}
+
+func TestRunShortDramaJSONIntegration(t *testing.T) {
+	if os.Getenv("TIKTOK_SHORT_DRAMA_INTEGRATION") != "1" {
+		t.Skip("set TIKTOK_SHORT_DRAMA_INTEGRATION=1 and TIKTOK_COOKIE to run against TikTok")
+	}
+	if os.Getenv("TIKTOK_COOKIE") == "" {
+		t.Skip("set TIKTOK_COOKIE with a valid msToken to run the Short Drama integration test")
+	}
+
+	const inputURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run -json %s: %v", inputURL, err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	var result shortdrama.Result
+	if err := json.NewDecoder(&stdout).Decode(&result); err != nil {
+		t.Fatalf("decode JSON output: %v\noutput: %s", err, stdout.String())
+	}
+	if result.ShortDrama == nil || result.ShortDrama.ID != "7665073849083368469" || result.ShortDrama.Episode != 1 {
+		t.Fatalf("unexpected Short Drama metadata: %#v", result.ShortDrama)
+	}
+	if result.Video.ID == "" || len(result.Media) == 0 {
+		t.Fatalf("expected episode video and media: %#v", result)
 	}
 }

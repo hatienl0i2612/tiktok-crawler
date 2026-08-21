@@ -13,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tiktok-crawler/internal/media"
+	"tiktok-crawler/internal/tiktok"
 )
 
 var (
@@ -25,7 +28,7 @@ const maxVideoPageAttempts = 3
 
 // Resolve crawls a TikTok video page and returns normalized metadata and media variants.
 func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, error) {
-	inputURL, err := parseTikTokURL(rawURL)
+	inputURL, err := tiktok.ParseURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -477,68 +480,26 @@ func walkDownloadFields(value any, collect bool, result *[]string) {
 			return
 		}
 		parsed, err := url.Parse(strings.TrimSpace(typed))
-		if err == nil && parsed.Scheme == "https" && isAllowedTikTokHost(parsed.Hostname()) {
+		if err == nil && parsed.Scheme == "https" && tiktok.IsAllowedHost(parsed.Hostname()) {
 			*result = append(*result, parsed.String())
 		}
 	}
 }
 
 func qualityName(height int) string {
-	if height <= 0 {
-		return "unknown"
-	}
-	return strconv.Itoa(height) + "p"
+	return media.QualityName(height)
 }
 
 func normalizeCodec(codec string) string {
-	codec = strings.ToLower(strings.TrimSpace(codec))
-	switch {
-	case strings.Contains(codec, "265"), strings.Contains(codec, "hevc"), strings.Contains(codec, "bytevc1"):
-		return "h265"
-	case strings.Contains(codec, "264"), strings.Contains(codec, "avc"):
-		return "h264"
-	case codec == "":
-		return "unknown"
-	default:
-		return codec
-	}
+	return tiktok.NormalizeCodec(codec)
 }
 
 func expiryFromURL(rawURL string) *time.Time {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return nil
-	}
-	for _, key := range []string{"expire", "expires", "x-expires", "x-m-expire"} {
-		value := parsed.Query().Get(key)
-		if value == "" {
-			continue
-		}
-		unixTime, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			continue
-		}
-		if unixTime > 1_000_000_000_000 {
-			unixTime /= 1000
-		}
-		expiresAt := time.Unix(unixTime, 0).UTC()
-		return &expiresAt
-	}
-	return nil
+	return tiktok.ExpiryFromURL(rawURL)
 }
 
 func uniqueStrings(values []string) []string {
-	seen := make(map[string]bool, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" || seen[value] {
-			continue
-		}
-		seen[value] = true
-		result = append(result, value)
-	}
-	return result
+	return media.UniqueStrings(values)
 }
 
 func maxInt64(left, right int64) int64 {
@@ -548,22 +509,6 @@ func maxInt64(left, right int64) int64 {
 	return left
 }
 
-func sortMedia(media []Media) {
-	sort.SliceStable(media, func(left, right int) bool {
-		if media[left].Watermarked != media[right].Watermarked {
-			return !media[left].Watermarked
-		}
-		leftPixels := media[left].Width * media[left].Height
-		rightPixels := media[right].Width * media[right].Height
-		if leftPixels != rightPixels {
-			return leftPixels > rightPixels
-		}
-		if media[left].Bitrate != media[right].Bitrate {
-			return media[left].Bitrate > media[right].Bitrate
-		}
-		if media[left].Codec != media[right].Codec {
-			return media[left].Codec < media[right].Codec
-		}
-		return media[left].URL < media[right].URL
-	})
+func sortMedia(variants []Media) {
+	media.Sort(variants)
 }

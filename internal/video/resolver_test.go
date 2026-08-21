@@ -78,7 +78,7 @@ func TestResolveVideo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+	client.session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		var body []byte
 		switch request.URL.Path {
 		case "/@creator/video/" + videoID:

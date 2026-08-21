@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"tiktok-crawler/internal/tiktok"
 )
 
 var (
@@ -225,36 +226,13 @@ func rawString(raw json.RawMessage) string {
 }
 
 func normalizeCodec(codec string) string {
-	codec = strings.ToLower(codec)
-	switch {
-	case strings.Contains(codec, "265"), strings.Contains(codec, "hevc"), strings.Contains(codec, "bytevc1"):
-		return "h265"
-	case strings.Contains(codec, "264"), strings.Contains(codec, "avc"):
-		return "h264"
-	default:
-		return codec
+	normalized := tiktok.NormalizeCodec(codec)
+	if normalized == "unknown" && strings.TrimSpace(codec) == "" {
+		return ""
 	}
+	return normalized
 }
 
 func expiryFromURL(rawURL string) *time.Time {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return nil
-	}
-	for _, key := range []string{"expire", "expires", "x-expires"} {
-		value := parsed.Query().Get(key)
-		if value == "" {
-			continue
-		}
-		unixTime, err := strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			continue
-		}
-		if unixTime > 1_000_000_000_000 {
-			unixTime /= 1000
-		}
-		expiresAt := time.Unix(unixTime, 0).UTC()
-		return &expiresAt
-	}
-	return nil
+	return tiktok.ExpiryFromURL(rawURL)
 }

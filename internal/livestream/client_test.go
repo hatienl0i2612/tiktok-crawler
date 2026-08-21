@@ -18,34 +18,6 @@ func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, 
 	return function(request)
 }
 
-func TestParseTikTokURL(t *testing.T) {
-	t.Parallel()
-
-	valid, err := parseTikTokURL("  https://www.tiktok.com/@example/live?lang=en  ")
-	if err != nil {
-		t.Fatalf("parse valid URL: %v", err)
-	}
-	if valid.Hostname() != "www.tiktok.com" {
-		t.Fatalf("unexpected hostname: %q", valid.Hostname())
-	}
-
-	invalid := []string{
-		"http://www.tiktok.com/@example/live",
-		"https://tiktok.com.example.org/@example/live",
-		"https://user:password@www.tiktok.com/@example/live",
-		"not a URL",
-	}
-	for _, rawURL := range invalid {
-		rawURL := rawURL
-		t.Run(rawURL, func(t *testing.T) {
-			t.Parallel()
-			if _, err := parseTikTokURL(rawURL); err == nil {
-				t.Fatalf("parseTikTokURL(%q) unexpectedly succeeded", rawURL)
-			}
-		})
-	}
-}
-
 func TestUsernameFromLiveURL(t *testing.T) {
 	t.Parallel()
 
@@ -103,36 +75,15 @@ func TestParseSIGIState(t *testing.T) {
 	}
 }
 
-func TestClientHeadersAndRedirectPolicy(t *testing.T) {
+func TestNewClientUsesLiveDefaults(t *testing.T) {
 	t.Parallel()
 
 	client, err := NewClient(ClientOptions{Cookie: " Cookie: session=abc ", UserAgent: " test-agent "})
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	request, _ := http.NewRequest(http.MethodGet, "https://www.tiktok.com/@example/live", nil)
-	client.setHeaders(request, "application/json", "https://www.tiktok.com/")
-	if got := request.Header.Get("User-Agent"); got != "test-agent" {
-		t.Fatalf("User-Agent = %q", got)
-	}
-	if got := request.Header.Get("Cookie"); got != "session=abc" {
-		t.Fatalf("Cookie = %q", got)
-	}
-	if got := request.Header.Get("Referer"); got != "https://www.tiktok.com/" {
-		t.Fatalf("Referer = %q", got)
-	}
-
-	allowed, _ := http.NewRequest(http.MethodGet, "https://m.tiktok.com/redirected", nil)
-	if err := client.httpClient.CheckRedirect(allowed, nil); err != nil {
-		t.Fatalf("allow TikTok redirect: %v", err)
-	}
-	disallowed, _ := http.NewRequest(http.MethodGet, "https://example.org/redirected", nil)
-	if err := client.httpClient.CheckRedirect(disallowed, nil); err == nil {
-		t.Fatal("external redirect was unexpectedly allowed")
-	}
-	previous := make([]*http.Request, 10)
-	if err := client.httpClient.CheckRedirect(allowed, previous); err == nil {
-		t.Fatal("redirect limit was not enforced")
+	if client.session.UserAgent() != "test-agent" || client.session.CookieValue("session") != "abc" {
+		t.Fatalf("unexpected session configuration")
 	}
 }
 
@@ -160,7 +111,7 @@ func TestResolveLiveRoom(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+	client.session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		var body []byte
 		switch request.URL.Path {
 		case "/@example/live":

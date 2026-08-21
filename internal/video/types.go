@@ -1,7 +1,11 @@
 // Package video resolves TikTok video metadata and downloadable media.
 package video
 
-import "time"
+import (
+	"time"
+
+	"tiktok-crawler/internal/media"
+)
 
 // DefaultUserAgent follows TikTok's mobile web path, which exposes the complete
 // server-rendered video state more consistently than its desktop CSR fallback.
@@ -105,48 +109,5 @@ type Caption struct {
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 }
 
-// Media is one downloadable encoding of a TikTok video.
-type Media struct {
-	Kind        string     `json:"kind"`
-	Watermarked bool       `json:"watermarked"`
-	Codec       string     `json:"codec"`
-	Format      string     `json:"format"`
-	Quality     string     `json:"quality"`
-	GearName    string     `json:"gear_name,omitempty"`
-	Width       int        `json:"width"`
-	Height      int        `json:"height"`
-	FPS         int        `json:"fps,omitempty"`
-	Bitrate     int64      `json:"bitrate,omitempty"`
-	Size        int64      `json:"size,omitempty"`
-	URI         string     `json:"uri,omitempty"`
-	URL         string     `json:"url"`
-	BackupURLs  []string   `json:"backup_urls,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-}
-
-// SelectOptions filters media variants before the highest-resolution match is selected.
-type SelectOptions struct {
-	Quality     string
-	Watermarked bool
-}
-
-// DownloadOptions controls where and how a media file is saved.
-type DownloadOptions struct {
-	OutputPath string
-	Referer    string
-	Progress   func(DownloadProgress)
-}
-
-// DownloadProgress reports the current number of downloaded bytes and the expected total.
-type DownloadProgress struct {
-	DownloadedBytes int64
-	TotalBytes      int64
-}
-
-// DownloadResult describes a completed media download.
-type DownloadResult struct {
-	Path        string `json:"path"`
-	Bytes       int64  `json:"bytes"`
-	ContentType string `json:"content_type"`
-	SourceURL   string `json:"source_url"`
-}
+// Shared media aliases keep the video package API focused on TikTok metadata.
+type Media = media.Variant

@@ -1,4 +1,4 @@
-package video
+package downloader
 
 import (
 	"errors"
@@ -6,21 +6,19 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"tiktok-crawler/internal/media"
 )
 
-// SelectMedia returns the highest-resolution media variant matching the requested filters.
-func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
+func selectVariant(variants []media.Variant, options Options) (*media.Variant, error) {
 	quality, bestQuality, err := normalizeQualityFilter(options.Quality)
 	if err != nil {
 		return nil, err
 	}
 
-	filtered := make([]Media, 0, len(media))
-	for _, candidate := range media {
+	filtered := make([]media.Variant, 0, len(variants))
+	for _, candidate := range variants {
 		if candidate.Watermarked != options.Watermarked {
-			continue
-		}
-		if !candidate.Watermarked && candidate.Codec != "h264" {
 			continue
 		}
 		if !bestQuality && candidate.Height != quality {
@@ -29,7 +27,7 @@ func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
 		filtered = append(filtered, candidate)
 	}
 	if len(filtered) == 0 {
-		variant := "H.264 media without a watermark"
+		variant := "media without a watermark"
 		if options.Watermarked {
 			variant = "media with a TikTok watermark"
 		}
@@ -37,13 +35,14 @@ func SelectMedia(media []Media, options SelectOptions) (*Media, error) {
 			"no %s matches quality=%s; available variants: %s",
 			variant,
 			options.Quality,
-			availableMediaSummary(media),
+			availableSummary(variants),
 		)
 	}
-	sortMedia(filtered)
+	media.Sort(filtered)
 	selected := filtered[0]
 	return &selected, nil
 }
+
 func normalizeQualityFilter(quality string) (int, bool, error) {
 	quality = strings.ToLower(strings.TrimSpace(quality))
 	if quality == "" || quality == "best" {
@@ -57,23 +56,22 @@ func normalizeQualityFilter(quality string) (int, bool, error) {
 	return height, false, nil
 }
 
-func availableMediaSummary(media []Media) string {
-	if len(media) == 0 {
+func availableSummary(variants []media.Variant) string {
+	if len(variants) == 0 {
 		return "none"
 	}
-	values := make([]string, 0, len(media))
+	values := make([]string, 0, len(variants))
 	seen := make(map[string]bool)
-	for _, candidate := range media {
+	for _, candidate := range variants {
 		watermark := "no-watermark"
 		if candidate.Watermarked {
 			watermark = "watermark"
 		}
 		value := strings.Join([]string{watermark, candidate.Codec, candidate.Quality}, "/")
-		if seen[value] {
-			continue
+		if !seen[value] {
+			seen[value] = true
+			values = append(values, value)
 		}
-		seen[value] = true
-		values = append(values, value)
 	}
 	sort.Strings(values)
 	return strings.Join(values, ", ")

@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
+
+	"tiktok-crawler/internal/tiktok"
 )
 
 const maxResponseSize = 16 << 20
@@ -21,42 +20,25 @@ var sigiStatePattern = regexp.MustCompile(`(?is)<script\b[^>]*\bid\s*=\s*["']SIG
 
 // Client resolves TikTok live pages using a shared cookie-aware HTTP session.
 type Client struct {
-	httpClient *http.Client
-	cookie     string
-	userAgent  string
+	session *tiktok.Session
 }
 
 // NewClient creates a resolver client. The supplied cookie is optional.
 func NewClient(options ClientOptions) (*Client, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return nil, fmt.Errorf("create cookie jar: %w", err)
-	}
-	userAgent := strings.TrimSpace(options.UserAgent)
+	userAgent := options.UserAgent
 	if userAgent == "" {
 		userAgent = DefaultUserAgent
 	}
-	return &Client{
-		cookie:    normalizeCookie(options.Cookie),
-		userAgent: userAgent,
-		httpClient: &http.Client{
-			Jar: jar,
-			CheckRedirect: func(request *http.Request, previous []*http.Request) error {
-				if len(previous) >= 10 {
-					return errors.New("too many redirects")
-				}
-				if request.URL.Scheme != "https" || !isTikTokHost(request.URL.Hostname()) {
-					return fmt.Errorf("TikTok redirected to a disallowed host: %s", request.URL.Redacted())
-				}
-				return nil
-			},
-		},
-	}, nil
+	session, err := tiktok.NewSession(tiktok.SessionOptions{Cookie: options.Cookie, UserAgent: userAgent})
+	if err != nil {
+		return nil, err
+	}
+	return &Client{session: session}, nil
 }
 
 // Resolve fetches a TikTok live page and returns all exposed playback streams.
 func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, error) {
-	inputURL, err := parseTikTokURL(rawURL)
+	inputURL, err := tiktok.ParseURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -163,59 +145,7 @@ func (client *Client) fetch(
 	accept string,
 	referer string,
 ) ([]byte, string, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	client.setHeaders(request, accept, referer)
-
-	response, err := client.httpClient.Do(request)
-	if err != nil {
-		return nil, "", err
-	}
-	defer response.Body.Close()
-
-	finalURL := response.Request.URL.String()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, finalURL, fmt.Errorf("HTTP %s", response.Status)
-	}
-	body, err := readLimited(response.Body)
-	if err != nil {
-		return nil, finalURL, err
-	}
-	return body, finalURL, nil
-}
-
-func (client *Client) setHeaders(request *http.Request, accept, referer string) {
-	request.Header.Set("User-Agent", client.userAgent)
-	request.Header.Set("Accept", accept)
-	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	request.Header.Set("Cache-Control", "no-cache")
-	if referer != "" {
-		request.Header.Set("Referer", referer)
-	}
-	if client.cookie != "" {
-		request.Header.Set("Cookie", client.cookie)
-	}
-}
-
-func parseTikTokURL(rawURL string) (*url.URL, error) {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return nil, fmt.Errorf("invalid URL: %w", err)
-	}
-	if parsed.Scheme != "https" || !isTikTokHost(parsed.Hostname()) {
-		return nil, errors.New("only HTTPS URLs under tiktok.com are accepted")
-	}
-	if parsed.User != nil {
-		return nil, errors.New("URL must not contain a username or password")
-	}
-	return parsed, nil
-}
-
-func isTikTokHost(host string) bool {
-	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	return host == "tiktok.com" || strings.HasSuffix(host, ".tiktok.com")
+	return client.session.Fetch(ctx, target, accept, referer, maxResponseSize)
 }
 
 func usernameFromLiveURL(parsed *url.URL) string {
@@ -267,25 +197,6 @@ func resolveError(pageErr, sigiErr, apiErr error) error {
 		parts = append(parts, "TikTok returned no room data")
 	}
 	return errors.New("unable to resolve live room: " + strings.Join(parts, "; "))
-}
-
-func normalizeCookie(cookie string) string {
-	cookie = strings.TrimSpace(cookie)
-	if len(cookie) >= 7 && strings.EqualFold(cookie[:7], "cookie:") {
-		cookie = strings.TrimSpace(cookie[7:])
-	}
-	return cookie
-}
-
-func readLimited(reader io.Reader) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(reader, maxResponseSize+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(body) > maxResponseSize {
-		return nil, fmt.Errorf("response exceeds the %d MiB limit", maxResponseSize>>20)
-	}
-	return body, nil
 }
 
 func makeResult(inputURL, finalURL, source string, info roomInfo, streams []Stream) *Result {

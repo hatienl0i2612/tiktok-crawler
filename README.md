@@ -4,9 +4,9 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
 This repository contains one Go command-line tool:
 
-- `tiktok_crawler` detects the URL type, downloads public TikTok videos, and resolves signed playback URLs for public TikTok LIVE rooms.
+- `tiktok_crawler` detects the URL type, downloads public TikTok videos and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
 
-Both commands use only the Go standard library.
+The command uses only the Go standard library.
 
 ## Download a release
 
@@ -48,7 +48,7 @@ Replace the example URLs with the TikTok video or LIVE room you want to process.
 
 ## Videos
 
-Download the best available H.264 video without a watermark (the default behavior):
+Download the best available video without a watermark (the default behavior):
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
@@ -97,6 +97,18 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
+
+## Short Drama episodes
+
+Short Drama episode URLs use the same video download options and download by default:
+
+```bash
+TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
+  go run ./cmd/tiktok_crawler \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok exposes episode metadata publicly but currently requires a valid browser `msToken` for the signed playback-metadata request. Copy your own TikTok cookie into `TIKTOK_COOKIE`; the tool generates `X-Bogus` locally and never writes the cookie to disk. `-json`, `-output`, and `-quality` work the same way as for regular videos.
 
 ## Livestreams
 

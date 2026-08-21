@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -9,11 +10,16 @@ import (
 	"tiktok-crawler/internal/livestream"
 )
 
+type failingWriter struct{ err error }
+
+func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }
+
 func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 	t.Setenv("TIKTOK_COOKIE", "")
 
 	const videoURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
 	const liveURL = "https://www.tiktok.com/@weathernewslive/live"
+	const shortDramaURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
 	tests := []struct {
 		name string
 		args []string
@@ -39,6 +45,11 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 			args: []string{"-json", "-url", videoURL},
 			want: options{inputURL: videoURL, content: contentTypeVideo, quality: "best", json: true, userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
 		},
+		{
+			name: "Short Drama uses video options",
+			args: []string{shortDramaURL, "-quality", "720p", "-output", "episode.mp4"},
+			want: options{inputURL: shortDramaURL, content: contentTypeShortDrama, output: "episode.mp4", quality: "720p", userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
+		},
 	}
 
 	for _, test := range tests {
@@ -63,6 +74,7 @@ func TestDetectContentType(t *testing.T) {
 	}{
 		{"https://www.tiktok.com/@example/live", contentTypeLive, false},
 		{"https://www.tiktok.com/@example/video/1234567890123456789?lang=en", contentTypeVideo, false},
+		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", contentTypeShortDrama, false},
 		{"https://example.com/@example/live", "", true},
 		{"https://www.tiktok.com/@example", "", true},
 	}
@@ -77,5 +89,13 @@ func TestDetectContentType(t *testing.T) {
 		if err != nil || got != test.want {
 			t.Errorf("detectContentType(%q) = %q, %v; want %q", test.url, got, err, test.want)
 		}
+	}
+}
+
+func TestPrintSummaryReturnsWriterError(t *testing.T) {
+	want := errors.New("write failed")
+	err := printSummary(failingWriter{err: want}, &livestream.Result{})
+	if !errors.Is(err, want) {
+		t.Fatalf("printSummary() error = %v, want %v", err, want)
 	}
 }

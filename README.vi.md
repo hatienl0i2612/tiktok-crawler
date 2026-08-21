@@ -4,7 +4,7 @@
 
 Repository này cung cấp một công cụ dòng lệnh Go:
 
-- `tiktok_crawler` tự nhận diện loại URL, tải video TikTok công khai và lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
+- `tiktok_crawler` tự nhận diện loại URL, tải video TikTok và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
 Công cụ chỉ sử dụng thư viện chuẩn của Go.
 
@@ -48,7 +48,7 @@ Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn x
 
 ## Video
 
-Tải video H.264 tốt nhất hiện có không kèm watermark (hành vi mặc định):
+Tải video chất lượng tốt nhất hiện có không kèm watermark (hành vi mặc định):
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
@@ -97,6 +97,18 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ không bao giờ bị ghi đè; hãy chọn đường dẫn `-output` khác khi cần. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
+
+## Tập Short Drama
+
+URL tập Short Drama sử dụng cùng các tùy chọn video và mặc định sẽ download:
+
+```bash
+TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
+  go run ./cmd/tiktok_crawler \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok cho phép lấy metadata tập công khai nhưng hiện yêu cầu `msToken` hợp lệ từ browser cho request playback metadata có chữ ký. Hãy copy cookie TikTok của chính bạn vào `TIKTOK_COOKIE`; tool tạo `X-Bogus` hoàn toàn ở local và không ghi cookie xuống ổ đĩa. Các option `-json`, `-output` và `-quality` hoạt động giống video thường.
 
 ## Livestream
 
