@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"regexp"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"tiktok-crawler/internal/cliargs"
+	"tiktok-crawler/internal/cookies"
 	"tiktok-crawler/internal/downloader"
 	"tiktok-crawler/internal/livestream"
 	"tiktok-crawler/internal/media"
@@ -40,16 +42,17 @@ const (
 )
 
 type options struct {
-	inputURL  string
-	content   contentType
-	json      bool
-	output    string
-	quality   string
-	watermark bool
-	verbose   bool
-	cookie    string
-	userAgent string
-	timeout   time.Duration
+	inputURL       string
+	content        contentType
+	json           bool
+	output         string
+	quality        string
+	watermark      bool
+	verbose        bool
+	cookiesFile    string
+	cookiesBrowser string
+	headers        map[string]string
+	timeout        time.Duration
 }
 
 func main() {
@@ -67,21 +70,74 @@ func run(args []string, stdout, stderr io.Writer) error {
 		}
 		return err
 	}
+	cookie, err := resolveCookieSources(options)
+	if err != nil {
+		return err
+	}
 
 	switch options.content {
 	case contentTypeVideo:
-		return runVideo(options, stdout, stderr)
+		return runVideo(options, cookie, stdout, stderr)
 	case contentTypeShortDrama:
-		return runShortDrama(options, stdout, stderr)
+		return runShortDrama(options, cookie, stdout, stderr)
 	case contentTypeLive:
-		return runLive(options, stdout, stderr)
+		return runLive(options, cookie, stdout, stderr)
 	default:
 		return fmt.Errorf("unsupported TikTok URL type %q", options.content)
 	}
 }
 
+// resolveCookieSources returns a Cookie header value from -cookies-file or
+// -cookies-from-browser. A -cookies-file path takes precedence over
+// -cookies-from-browser. The returned header is sent on every subsequent
+// request because each content-type runner passes it into the shared session.
+func resolveCookieSources(options options) (string, error) {
+	if options.cookiesFile != "" {
+		return cookies.LoadCookieFileHeader(options.cookiesFile)
+	}
+	if options.cookiesBrowser != "" {
+		return cookies.LoadTikTokCookieHeader(options.cookiesBrowser)
+	}
+	return "", nil
+}
+
+// stringListFlag collects repeated flag values such as -headers.
+type stringListFlag []string
+
+// String implements flag.Value.
+func (list *stringListFlag) String() string {
+	return strings.Join(*list, ", ")
+}
+
+// Set appends one repeated flag value.
+func (list *stringListFlag) Set(value string) error {
+	*list = append(*list, value)
+	return nil
+}
+
+// parseHeaderPairs turns repeated -headers "Key: Value" occurrences into a
+// canonical header map. Each occurrence must be one pair so header values that
+// contain colons or semicolons are preserved untouched.
+func parseHeaderPairs(values []string) (map[string]string, error) {
+	headers := make(map[string]string, len(values))
+	for _, raw := range values {
+		key, value, ok := strings.Cut(raw, ":")
+		if !ok {
+			return nil, fmt.Errorf("invalid -headers value %q, want \"Key: Value\"", raw)
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key == "" {
+			return nil, fmt.Errorf("invalid -headers value %q: empty header name", raw)
+		}
+		headers[http.CanonicalHeaderKey(key)] = value
+	}
+	return headers, nil
+}
+
 func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var options options
+	var headerValues stringListFlag
 	flags := flag.NewFlagSet("tiktok_crawler", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.StringVar(&options.inputURL, "url", "", "TikTok video, Short Drama episode, or LIVE URL (may also be supplied as the final argument)")
@@ -90,15 +146,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for LIVE URLs)")
 	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked video variant (ignored for LIVE URLs)")
 	flags.BoolVar(&options.verbose, "verbose", false, "print a LIVE room summary to stderr (ignored for video URLs)")
-	flags.StringVar(&options.cookie, "cookie", "", "TikTok Cookie header value (or use TIKTOK_COOKIE)")
-	flags.StringVar(&options.userAgent, "user-agent", livestream.DefaultUserAgent, "User-Agent sent to TikTok LIVE (ignored for video URLs)")
+	flags.StringVar(&options.cookiesFile, "cookies-file", "", "path to a TikTok cookies .txt file (Netscape cookie-jar export or raw Cookie header value)")
+	flags.StringVar(&options.cookiesBrowser, "cookies-from-browser", "", "read a TikTok Cookie header from an installed browser (brave, chrome, edge, firefox, safari, ...)")
+	flags.Var(&headerValues, "headers", "additional HTTP header to send on every request, as 'Key: Value'; User-Agent can be set here; may be repeated")
 	flags.DurationVar(&options.timeout, "timeout", 20*time.Second, "LIVE request timeout (ignored for video URLs)")
 	flags.Usage = func() {
 		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
 		flags.PrintDefaults()
 	}
 
-	if err := flags.Parse(cliargs.ReorderInterspersedFlags(args, "url", "output", "quality", "cookie", "user-agent", "timeout")); err != nil {
+	if err := flags.Parse(cliargs.ReorderInterspersedFlags(args, "url", "output", "quality", "cookies-file", "cookies-from-browser", "headers", "timeout")); err != nil {
 		return options, err
 	}
 	if options.inputURL == "" {
@@ -116,8 +173,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		return options, err
 	}
 	options.content = content
-	if options.cookie == "" {
-		options.cookie = os.Getenv("TIKTOK_COOKIE")
+	headers, err := parseHeaderPairs(headerValues)
+	if err != nil {
+		return options, err
+	}
+	if len(headers) > 0 {
+		options.headers = headers
 	}
 
 	if isDownloadableContent(options.content) {
@@ -159,8 +220,8 @@ func isDownloadableContent(content contentType) bool {
 	return content == contentTypeVideo || content == contentTypeShortDrama
 }
 
-func runVideo(options options, stdout, stderr io.Writer) error {
-	client, err := video.NewClient(video.ClientOptions{Cookie: options.cookie})
+func runVideo(options options, cookie string, stdout, stderr io.Writer) error {
+	client, err := video.NewClient(video.ClientOptions{Cookie: cookie, Headers: options.headers})
 	if err != nil {
 		return err
 	}
@@ -181,8 +242,8 @@ func runVideo(options options, stdout, stderr io.Writer) error {
 	}, result.Media, options, stdout, stderr)
 }
 
-func runShortDrama(options options, stdout, stderr io.Writer) error {
-	client, err := shortdrama.NewClient(shortdrama.ClientOptions{Cookie: options.cookie})
+func runShortDrama(options options, cookie string, stdout, stderr io.Writer) error {
+	client, err := shortdrama.NewClient(shortdrama.ClientOptions{Cookie: cookie, Headers: options.headers})
 	if err != nil {
 		return err
 	}
@@ -231,8 +292,8 @@ func downloadVideo(
 	return err
 }
 
-func runLive(options options, stdout, stderr io.Writer) error {
-	client, err := livestream.NewClient(livestream.ClientOptions{Cookie: options.cookie, UserAgent: options.userAgent})
+func runLive(options options, cookie string, stdout, stderr io.Writer) error {
+	client, err := livestream.NewClient(livestream.ClientOptions{Cookie: cookie, Headers: options.headers})
 	if err != nil {
 		return err
 	}

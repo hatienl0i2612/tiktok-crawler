@@ -6,7 +6,7 @@ Repository này cung cấp một công cụ dòng lệnh Go:
 
 - `tiktok_crawler` tự nhận diện loại URL, tải video TikTok và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
-Công cụ chỉ sử dụng thư viện chuẩn của Go.
+Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
 
 ## Tải bản phát hành
 
@@ -103,12 +103,20 @@ File tải xuống được ghi vào một file tạm và chỉ được chuyể
 URL tập Short Drama sử dụng cùng các tùy chọn video và mặc định sẽ download:
 
 ```bash
-TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
 ```
 
-TikTok cho phép lấy metadata tập công khai nhưng hiện yêu cầu `msToken` hợp lệ từ browser cho request playback metadata có chữ ký. Hãy copy cookie TikTok của chính bạn vào `TIKTOK_COOKIE`; tool tạo `X-Bogus` hoàn toàn ở local và không ghi cookie xuống ổ đĩa. Các option `-json`, `-output` và `-quality` hoạt động giống video thường.
+Hoặc nạp cookie từ file `.txt`:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok cho phép lấy metadata tập công khai nhưng hiện yêu cầu `msToken` hợp lệ từ browser cho request playback metadata có chữ ký. Hãy cung cấp cookie TikTok của chính bạn bằng `-cookies-from-browser` hoặc `-cookies-file`; tool tạo `X-Bogus` hoàn toàn ở local và không ghi cookie xuống ổ đĩa. Các option `-json`, `-output` và `-quality` hoạt động giống video thường.
 
 ## Livestream
 
@@ -142,15 +150,52 @@ go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
 
 ## Xác thực và giới hạn khu vực
 
-Video và phòng LIVE công khai thường hoạt động mà không cần xác thực. Nếu TikTok yêu cầu đăng nhập, xác minh độ tuổi hoặc một khu vực cụ thể, hãy cung cấp cookie của riêng bạn qua biến môi trường:
+Video và phòng LIVE công khai thường hoạt động mà không cần xác thực. Nếu TikTok yêu cầu đăng nhập, xác minh độ tuổi hoặc một khu vực cụ thể, hãy cung cấp cookie từ trình duyệt đã đăng nhập hoặc từ file cookie:
 
 ```bash
-TIKTOK_COOKIE='ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Không commit cookie vào source control. Mỗi client lưu các cookie nhận được từ trang TikTok và tái sử dụng chúng cho các request liên quan.
+
+### Cookie từ trình duyệt
+
+Thay vì sao chép cookie thủ công, hãy đọc cookie từ trình duyệt đã đăng nhập TikTok:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Các trình duyệt được hỗ trợ theo package `browsercookie`: brave, chrome, chromium, vivaldi, edge, edge-dev, arc, opera, opera-gx, firefox, librewolf, zen, safari. Công cụ chỉ đọc cookie thuộc tiktok.com và gửi chúng trong mọi request. Trên macOS, Terminal có thể cần quyền Full Disk Access để đọc kho cookie của trình duyệt; Safari và một số trình duyệt Chromium cũng yêu cầu trình duyệt phải được liên kết với Keychain của macOS.
+
+### Cookie từ file
+
+Truyền đường dẫn tới file cookie `.txt` qua option `-cookies-file`. File có thể chứa giá trị Cookie header thô (`ttwid=...; sessionid=...`) hoặc là file xuất Netscape cookie-jar:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Cookie tải từ file sẽ được gửi trong mọi request. `-cookies-file` được ưu tiên hơn `-cookies-from-browser`. Không commit file cookie vào source control.
+
+### Header tùy chỉnh
+
+Thêm HTTP header vào mọi request bằng `-headers`. Có thể lặp lại nhiều lần, mỗi lần một cặp `Key: Value`:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -headers 'User-Agent: Mozilla/5.0 ...' \
+  -headers 'X-Forwarded-For: 1.2.3.4' \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Các header tùy chỉnh ghi đè header mặc định của tool (`User-Agent`, `Accept-Language`, `Cache-Control`, `Accept`). Để gửi dấu vân tay trình duyệt khác, hãy đặt `User-Agent` qua `-headers` (mặc định tool sẽ tự dùng). Khóa `Referer` hoặc `Cookie` sẽ bị thay bởi giá trị mà crawler tự tính theo từng request.
 
 ## Build từ source
 

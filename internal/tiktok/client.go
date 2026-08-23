@@ -19,6 +19,11 @@ const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 type SessionOptions struct {
 	Cookie    string
 	UserAgent string
+	// Headers are applied on every request. They override the standard
+	// defaults (User-Agent, Accept-Language, Cache-Control, Accept). A
+	// User-Agent header here also decides the value reported by
+	// (*Session).UserAgent, which Short Drama signing relies on.
+	Headers map[string]string
 }
 
 // Session sends requests with consistent TikTok headers and redirect policy.
@@ -26,6 +31,7 @@ type Session struct {
 	httpClient *http.Client
 	cookie     string
 	userAgent  string
+	headers    map[string]string
 }
 
 // NewSession creates a cookie-aware TikTok HTTP session.
@@ -34,13 +40,18 @@ func NewSession(options SessionOptions) (*Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create cookie jar: %w", err)
 	}
+	headers := normalizeHeaders(options.Headers)
 	userAgent := strings.TrimSpace(options.UserAgent)
+	if ua := headers["User-Agent"]; ua != "" {
+		userAgent = ua
+	}
 	if userAgent == "" {
 		userAgent = DefaultUserAgent
 	}
 	return &Session{
 		cookie:    NormalizeCookie(options.Cookie),
 		userAgent: userAgent,
+		headers:   headers,
 		httpClient: &http.Client{
 			Jar: jar,
 			CheckRedirect: func(request *http.Request, previous []*http.Request) error {
@@ -54,6 +65,27 @@ func NewSession(options SessionOptions) (*Session, error) {
 			},
 		},
 	}, nil
+}
+
+// normalizeHeaders trims and canonicalizes custom headers, dropping empty
+// names and returning nil when no custom headers survive.
+func normalizeHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	normalized := make(map[string]string, len(headers))
+	for name, value := range headers {
+		name = strings.TrimSpace(name)
+		value = strings.TrimSpace(value)
+		if name == "" {
+			continue
+		}
+		normalized[http.CanonicalHeaderKey(name)] = value
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 // Fetch executes a GET request and reads a size-limited response body.
@@ -91,12 +123,17 @@ func (session *Session) Get(ctx context.Context, target, accept, referer string)
 	return session.httpClient.Do(request)
 }
 
-// SetHeaders applies the standard headers used by TikTok web requests.
+// SetHeaders applies the standard headers used by TikTok web requests. Custom
+// session headers override the standard defaults; the per-request Referer and
+// the configured Cookie are always applied last.
 func (session *Session) SetHeaders(request *http.Request, accept, referer string) {
 	request.Header.Set("User-Agent", session.userAgent)
 	request.Header.Set("Accept", accept)
 	request.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	request.Header.Set("Cache-Control", "no-cache")
+	for name, value := range session.headers {
+		request.Header.Set(name, value)
+	}
 	if referer != "" {
 		request.Header.Set("Referer", referer)
 	}

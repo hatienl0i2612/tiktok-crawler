@@ -12,6 +12,8 @@ const DefaultUserAgent = tiktok.DefaultUserAgent
 type ClientOptions struct {
 	Cookie    string
 	UserAgent string
+	// Headers are applied on every request and override the standard defaults.
+	Headers map[string]string
 }
 
 // Result contains live-room metadata and every playback URL exposed by TikTok.

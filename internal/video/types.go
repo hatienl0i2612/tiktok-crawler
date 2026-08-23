@@ -16,6 +16,8 @@ const DefaultUserAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) " +
 type ClientOptions struct {
 	Cookie    string
 	UserAgent string
+	// Headers are applied on every request and override the standard defaults.
+	Headers map[string]string
 }
 
 // Result contains normalized video metadata and every downloadable media variant.

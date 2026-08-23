@@ -14,6 +14,8 @@ const DefaultUserAgent = video.DefaultUserAgent
 type ClientOptions struct {
 	Cookie    string
 	UserAgent string
+	// Headers are applied on every request and override the standard defaults.
+	Headers map[string]string
 }
 
 // Result contains series, episode, and downloadable media metadata.

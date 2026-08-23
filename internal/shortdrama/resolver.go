@@ -82,7 +82,7 @@ func (client *Client) fetchShortDramaEpisode(ctx context.Context, referer, drama
 func (client *Client) fetchSignedShortDramaItem(ctx context.Context, referer, itemID string) (shortDramaItem, error) {
 	msToken := client.session.CookieValue("msToken")
 	if msToken == "" {
-		return shortDramaItem{}, errors.New("TikTok requires a valid msToken cookie for Short Drama playback; set TIKTOK_COOKIE from your own browser session")
+		return shortDramaItem{}, errors.New("TikTok requires a valid msToken cookie for Short Drama playback; use -cookies-from-browser or -cookies-file to provide cookies from your own browser session")
 	}
 	now := time.Now()
 	endpoint, _ := url.Parse("https://www.tiktok.com/api/item/detail/")
@@ -127,7 +127,7 @@ func (client *Client) fetchSignedShortDramaItem(ctx context.Context, referer, it
 		return shortDramaItem{}, err
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
-		return shortDramaItem{}, errors.New("TikTok returned an empty signed response; refresh TIKTOK_COOKIE and try again")
+		return shortDramaItem{}, errors.New("TikTok returned an empty signed response; refresh your browser cookies (e.g. -cookies-from-browser or -cookies-file) and try again")
 	}
 	var response shortDramaItemDetailResponse
 	if err := decodeJSON(body, &response); err != nil {

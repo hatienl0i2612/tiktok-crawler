@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -15,8 +16,6 @@ type failingWriter struct{ err error }
 func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }
 
 func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
-	t.Setenv("TIKTOK_COOKIE", "")
-
 	const videoURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
 	const liveURL = "https://www.tiktok.com/@weathernewslive/live"
 	const shortDramaURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
@@ -28,27 +27,42 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 		{
 			name: "video with flags after URL",
 			args: []string{videoURL, "-watermark", "-quality", "720p", "-output", "result.mp4"},
-			want: options{inputURL: videoURL, content: contentTypeVideo, output: "result.mp4", watermark: true, quality: "720p", userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
+			want: options{inputURL: videoURL, content: contentTypeVideo, output: "result.mp4", watermark: true, quality: "720p", timeout: 20 * time.Second},
 		},
 		{
 			name: "live ignores video-only options",
 			args: []string{liveURL, "-quality", "720p", "-watermark", "-output", "unused.mp4", "-json"},
-			want: options{inputURL: liveURL, content: contentTypeLive, output: "unused.mp4", watermark: true, quality: "720p", json: true, userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
+			want: options{inputURL: liveURL, content: contentTypeLive, output: "unused.mp4", watermark: true, quality: "720p", json: true, timeout: 20 * time.Second},
 		},
 		{
 			name: "live flags before URL",
-			args: []string{"-verbose", "-timeout", "30s", "-user-agent", "test-agent", liveURL},
-			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", verbose: true, userAgent: "test-agent", timeout: 30 * time.Second},
+			args: []string{"-verbose", "-timeout", "30s", "-headers", "User-Agent: test-agent", liveURL},
+			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", verbose: true, headers: map[string]string{"User-Agent": "test-agent"}, timeout: 30 * time.Second},
 		},
 		{
 			name: "URL flag",
 			args: []string{"-json", "-url", videoURL},
-			want: options{inputURL: videoURL, content: contentTypeVideo, quality: "best", json: true, userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
+			want: options{inputURL: videoURL, content: contentTypeVideo, quality: "best", json: true, timeout: 20 * time.Second},
+		},
+		{
+			name: "cookies from browser flag",
+			args: []string{liveURL, "-cookies-from-browser", "chrome"},
+			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", cookiesBrowser: "chrome", timeout: 20 * time.Second},
+		},
+		{
+			name: "cookies file flag",
+			args: []string{videoURL, "-cookies-file", "cookies.txt"},
+			want: options{inputURL: videoURL, content: contentTypeVideo, quality: "best", cookiesFile: "cookies.txt", timeout: 20 * time.Second},
 		},
 		{
 			name: "Short Drama uses video options",
 			args: []string{shortDramaURL, "-quality", "720p", "-output", "episode.mp4"},
-			want: options{inputURL: shortDramaURL, content: contentTypeShortDrama, output: "episode.mp4", quality: "720p", userAgent: livestream.DefaultUserAgent, timeout: 20 * time.Second},
+			want: options{inputURL: shortDramaURL, content: contentTypeShortDrama, output: "episode.mp4", quality: "720p", timeout: 20 * time.Second},
+		},
+		{
+			name: "repeated headers flag",
+			args: []string{liveURL, "-headers", "X-Custom: abc", "-headers", "user-agent: custom-ua"},
+			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", headers: map[string]string{"X-Custom": "abc", "User-Agent": "custom-ua"}, timeout: 20 * time.Second},
 		},
 	}
 
@@ -63,6 +77,14 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 				t.Fatalf("options = %#v, want %#v", got, test.want)
 			}
 		})
+	}
+}
+
+func TestParseOptionsRejectsInvalidHeaders(t *testing.T) {
+	var stderr bytes.Buffer
+	_, err := parseOptions([]string{"https://www.tiktok.com/@example/video/1234567890123456789", "-headers", "MissingColon"}, &stderr)
+	if err == nil {
+		t.Fatal("parseOptions() accepted a -headers value without a colon")
 	}
 }
 
@@ -98,4 +120,56 @@ func TestPrintSummaryReturnsWriterError(t *testing.T) {
 	if !errors.Is(err, want) {
 		t.Fatalf("printSummary() error = %v, want %v", err, want)
 	}
+}
+
+func TestResolveCookieSourcesEmptyWithoutSource(t *testing.T) {
+	cookie, err := resolveCookieSources(options{})
+	if err != nil || cookie != "" {
+		t.Fatalf("resolveCookieSources() = %q, %v; want empty", cookie, err)
+	}
+}
+
+func TestResolveCookieSourcesRejectsUnsupportedBrowser(t *testing.T) {
+	_, err := resolveCookieSources(options{cookiesBrowser: "netscape"})
+	if err == nil {
+		t.Fatal("resolveCookieSources() succeeded for an unsupported browser")
+	}
+}
+
+func TestResolveCookieSourcesLoadsFile(t *testing.T) {
+	path := writeTempCookieFile(t, "sessionid=abc; ttwid=xyz")
+	cookie, err := resolveCookieSources(options{cookiesFile: path, cookiesBrowser: "chrome"})
+	if err != nil {
+		t.Fatalf("resolveCookieSources(): %v", err)
+	}
+	if cookie != "sessionid=abc; ttwid=xyz" {
+		t.Fatalf("cookie = %q, want cookies loaded from the file", cookie)
+	}
+}
+
+func TestResolveCookieSourcesFileTakesPrecedence(t *testing.T) {
+	path := writeTempCookieFile(t, "sessionid=from-file")
+	cookie, err := resolveCookieSources(options{cookiesFile: path, cookiesBrowser: "chrome"})
+	if err != nil {
+		t.Fatalf("resolveCookieSources(): %v", err)
+	}
+	if cookie != "sessionid=from-file" {
+		t.Fatalf("cookie = %q, want the file to take precedence", cookie)
+	}
+}
+
+func TestResolveCookieSourcesMissingFile(t *testing.T) {
+	_, err := resolveCookieSources(options{cookiesFile: "does-not-exist.txt"})
+	if err == nil {
+		t.Fatal("resolveCookieSources() succeeded for a missing cookie file")
+	}
+}
+
+func writeTempCookieFile(t *testing.T, content string) string {
+	t.Helper()
+	path := t.TempDir() + "/cookies.txt"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write cookie file: %v", err)
+	}
+	return path
 }

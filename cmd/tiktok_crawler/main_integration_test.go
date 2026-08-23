@@ -75,15 +75,14 @@ func TestRunLiveJSONIntegration(t *testing.T) {
 
 func TestRunShortDramaJSONIntegration(t *testing.T) {
 	if os.Getenv("TIKTOK_SHORT_DRAMA_INTEGRATION") != "1" {
-		t.Skip("set TIKTOK_SHORT_DRAMA_INTEGRATION=1 and TIKTOK_COOKIE to run against TikTok")
-	}
-	if os.Getenv("TIKTOK_COOKIE") == "" {
-		t.Skip("set TIKTOK_COOKIE with a valid msToken to run the Short Drama integration test")
+		t.Skip("set TIKTOK_SHORT_DRAMA_INTEGRATION=1 to run against TikTok")
 	}
 
 	const inputURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
+	// Short Drama needs a valid browser msToken cookie. Use -cookies-from-browser
+	// (or -cookies-file) with a browser that is logged in to TikTok.
+	if err := run([]string{inputURL, "-json", "-cookies-from-browser", "chrome"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run -json %s: %v", inputURL, err)
 	}
 	if stderr.Len() != 0 {

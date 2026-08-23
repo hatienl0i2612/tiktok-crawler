@@ -6,7 +6,7 @@
 
 - `tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
 
-该工具仅使用 Go 标准库。
+该工具使用 Go 标准库，并通过 `browsercookie` 包可选地从已安装的浏览器中导入 cookie。
 
 ## 下载发行版
 
@@ -103,12 +103,20 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 短剧剧集 URL 使用与普通视频相同的选项，并默认开始下载：
 
 ```bash
-TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
 ```
 
-TikTok 允许公开获取剧集元数据，但目前要求使用浏览器会话中的有效 `msToken` 请求带签名的播放元数据。请将你自己的 TikTok cookie 传入 `TIKTOK_COOKIE`；工具会在本地生成 `X-Bogus`，不会将 cookie 写入磁盘。`-json`、`-output` 和 `-quality` 与普通视频的行为相同。
+或从 `.txt` 文件加载 cookie：
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok 允许公开获取剧集元数据，但目前要求使用浏览器会话中的有效 `msToken` 请求带签名的播放元数据。请通过 `-cookies-from-browser` 或 `-cookies-file` 提供你自己的 TikTok cookie；工具会在本地生成 `X-Bogus`，不会将 cookie 写入磁盘。`-json`、`-output` 和 `-quality` 与普通视频的行为相同。
 
 ## 直播
 
@@ -142,15 +150,52 @@ go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
 
 ## 身份验证与地区限制
 
-公开视频和 LIVE 直播间通常无需身份验证即可使用。如果 TikTok 要求登录、年龄验证或特定地区，请通过环境变量提供你自己的 cookie：
+公开视频和 LIVE 直播间通常无需身份验证即可使用。如果 TikTok 要求登录、年龄验证或特定地区，请使用已登录的浏览器或 cookie 文件提供你自己的 cookie：
 
 ```bash
-TIKTOK_COOKIE='ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 请勿将 cookie 提交到版本控制中。每个客户端都会保存从 TikTok 页面收到的 cookie，并在相关请求中重复使用。
+
+### 从浏览器导入 cookie
+
+无需手动复制 cookie，可直接从已登录 TikTok 的浏览器中读取：
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+支持的浏览器与 `browsercookie` 库一致：brave、chrome、chromium、vivaldi、edge、edge-dev、arc、opera、opera-gx、firefox、librewolf、zen、safari。该工具仅读取属于 TikTok 域的 cookie，并在后续每个请求中自动携带。在 macOS 上，终端可能需要“完全磁盘访问权限”才能读取浏览器的 cookie 存储；Safari 和部分 Chromium 浏览器还要求浏览器已接入 macOS 钥匙串。
+
+### 从文件导入 cookie
+
+使用 `-cookies-file` 传入 cookie `.txt` 文件的路径。文件内容可以是原始 Cookie header 值（`ttwid=...; sessionid=...`），也可以是 Netscape cookie-jar 导出格式：
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+从文件加载的 cookie 会在后续每个请求中自动携带。`-cookies-file` 优先于 `-cookies-from-browser`。请勿将 cookie 文件提交到版本控制。
+
+### 自定义请求头
+
+使用 `-headers` 为每个请求添加额外的 HTTP 头，可重复使用，每次一个 `Key: Value` 对：
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -headers 'User-Agent: Mozilla/5.0 ...' \
+  -headers 'X-Forwarded-For: 1.2.3.4' \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+自定义请求头会覆盖工具的默认值（`User-Agent`、`Accept-Language`、`Cache-Control`、`Accept`）。如需发送不同的浏览器特征，请通过 `-headers` 设置 `User-Agent`（否则使用工具默认值）。`Referer` 或 `Cookie` 键会被爬虫按请求计算出的值所取代。
 
 ## 从源代码构建
 

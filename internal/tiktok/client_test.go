@@ -69,6 +69,43 @@ func TestSessionHeadersCookieAndRedirectPolicy(t *testing.T) {
 	}
 }
 
+func TestSessionCustomHeadersOverrideDefaults(t *testing.T) {
+	t.Parallel()
+	session, err := NewSession(SessionOptions{
+		Cookie:    "session=abc",
+		UserAgent: "default-agent",
+		Headers: map[string]string{
+			"user-agent":      "custom-agent",
+			"Accept-Language": "fr-FR,fr;q=0.9",
+			"X-Custom":        "yes",
+			"":                "ignored",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	if got := session.UserAgent(); got != "custom-agent" {
+		t.Fatalf("UserAgent() = %q, want the custom header value", got)
+	}
+	request, _ := http.NewRequest(http.MethodGet, "https://www.tiktok.com/", nil)
+	session.SetHeaders(request, "application/json", "https://www.tiktok.com/referer")
+	if got := request.Header.Get("User-Agent"); got != "custom-agent" {
+		t.Fatalf("User-Agent header = %q", got)
+	}
+	if got := request.Header.Get("X-Custom"); got != "yes" {
+		t.Fatalf("X-Custom header = %q", got)
+	}
+	if got := request.Header.Get("Accept-Language"); got != "fr-FR,fr;q=0.9" {
+		t.Fatalf("Accept-Language header = %q, want the custom override", got)
+	}
+	if got := request.Header.Get("Referer"); got != "https://www.tiktok.com/referer" {
+		t.Fatalf("Referer header = %q, want the per-request value", got)
+	}
+	if got := request.Header.Get("Cookie"); got != "session=abc" {
+		t.Fatalf("Cookie header = %q, want the configured cookie", got)
+	}
+}
+
 func TestSharedHelpers(t *testing.T) {
 	t.Parallel()
 	body, err := ReadLimited(strings.NewReader("abc"), 3)

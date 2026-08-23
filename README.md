@@ -6,7 +6,7 @@ This repository contains one Go command-line tool:
 
 - `tiktok_crawler` detects the URL type, downloads public TikTok videos and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
 
-The command uses only the Go standard library.
+The command uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
 
 ## Download a release
 
@@ -103,12 +103,20 @@ Downloads are written to a temporary file and moved into place only after comple
 Short Drama episode URLs use the same video download options and download by default:
 
 ```bash
-TIKTOK_COOKIE='msToken=...; ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
 ```
 
-TikTok exposes episode metadata publicly but currently requires a valid browser `msToken` for the signed playback-metadata request. Copy your own TikTok cookie into `TIKTOK_COOKIE`; the tool generates `X-Bogus` locally and never writes the cookie to disk. `-json`, `-output`, and `-quality` work the same way as for regular videos.
+Or load the cookies from a `.txt` file:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
+```
+
+TikTok exposes episode metadata publicly but currently requires a valid browser `msToken` for the signed playback-metadata request. Provide your own TikTok cookie with `-cookies-from-browser` or `-cookies-file`; the tool generates `X-Bogus` locally and never writes the cookie to disk. `-json`, `-output`, and `-quality` work the same way as for regular videos.
 
 ## Livestreams
 
@@ -142,15 +150,54 @@ go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
 
 ## Authentication and regional restrictions
 
-Public videos and live rooms usually work without authentication. If TikTok requires login, age verification, or a specific region, provide your own cookie through the environment:
+Public videos and live rooms usually work without authentication. If TikTok requires login, age verification, or a specific region, provide your own cookies from a logged-in browser or a cookie file:
 
 ```bash
-TIKTOK_COOKIE='ttwid=...; sessionid=...' \
-  go run ./cmd/tiktok_crawler \
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
   'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
 Do not commit cookies to source control. Each client keeps cookies received from TikTok pages and reuses them for related requests.
+
+### Cookies from a browser
+
+Instead of pasting a cookie manually, read it from a browser that is already logged in to TikTok:
+
+Instead of pasting a cookie manually, read it from a browser that is already logged in to TikTok:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-from-browser chrome \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Supported browser names follow the `browsercookie` library: brave, chrome, chromium, vivaldi, edge, edge-dev, arc, opera, opera-gx, firefox, librewolf, zen, safari. Only cookies belonging to TikTok hosts are read, and they are sent on every request. On macOS, the terminal may need Full Disk Access to read a browser's cookie store; Safari and some Chromium browsers also require the browser to be integrated with the macOS keychain.
+
+### Cookies from a file
+
+Pass a path to a cookies `.txt` file with `-cookies-file`. The file may be either a raw Cookie header value (`ttwid=...; sessionid=...`) or a Netscape cookie-jar export:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -cookies-file ./cookies.txt \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Cookies loaded from the file are sent on every request. Explicit `-cookies-file` takes precedence over `-cookies-from-browser`. Do not commit cookie files to source control.
+
+### Custom headers
+
+Add extra HTTP headers to every request with `-headers`. Repeat the flag, one `Key: Value` pair per occurrence:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -headers 'User-Agent: Mozilla/5.0 ...' \
+  -headers 'X-Forwarded-For: 1.2.3.4' \
+  'https://www.tiktok.com/@example/video/1234567890123456789'
+```
+
+Custom headers override the tool's defaults (`User-Agent`, `Accept-Language`, `Cache-Control`, `Accept`). To send a specific browser signature, set `User-Agent` through `-headers` (the tool's default is otherwise used). A `Referer` or `Cookie` key is superseded by the request-specific values the crawler computes.
 
 ## Build
 

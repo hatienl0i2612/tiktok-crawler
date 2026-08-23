@@ -15,7 +15,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if userAgent == "" {
 		userAgent = DefaultUserAgent
 	}
-	session, err := tiktok.NewSession(tiktok.SessionOptions{Cookie: options.Cookie, UserAgent: userAgent})
+	session, err := tiktok.NewSession(tiktok.SessionOptions{Cookie: options.Cookie, UserAgent: userAgent, Headers: options.Headers})
 	if err != nil {
 		return nil, err
 	}
