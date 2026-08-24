@@ -29,12 +29,13 @@ type Result struct {
 
 // User describes the owner of a TikTok live room.
 type User struct {
-	ID            string `json:"id"`
-	UniqueID      string `json:"unique_id"`
-	Nickname      string `json:"nickname"`
-	RoomID        string `json:"room_id"`
-	Status        int    `json:"status"`
-	FollowerCount int64  `json:"follower_count"`
+	ID            string   `json:"id"`
+	UniqueID      string   `json:"unique_id"`
+	Nickname      string   `json:"nickname"`
+	RoomID        string   `json:"room_id"`
+	Status        int      `json:"status"`
+	FollowerCount int64    `json:"follower_count"`
+	AvatarURLs    []string `json:"avatar_urls,omitempty"`
 }
 
 // Live describes the current state of a TikTok live room.
@@ -46,6 +47,8 @@ type Live struct {
 	ViewerCount int64      `json:"viewer_count"`
 	EnterCount  int64      `json:"enter_count"`
 	StartTime   *time.Time `json:"start_time,omitempty"`
+	Cover       string     `json:"cover,omitempty"`
+	SquareCover string     `json:"square_cover,omitempty"`
 }
 
 // Stream is one signed playback URL for a quality, codec, protocol, and CDN line.

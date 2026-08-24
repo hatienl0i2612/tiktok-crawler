@@ -71,6 +71,9 @@ func TestRunLiveJSONIntegration(t *testing.T) {
 	if result.InputURL != inputURL || !strings.EqualFold(result.User.UniqueID, "weathernewslive") || !result.Live.IsLive || len(result.Streams) == 0 {
 		t.Fatalf("unexpected LIVE result: %+v", result)
 	}
+	if result.Live.Cover == "" || len(result.User.AvatarURLs) == 0 {
+		t.Fatalf("expected live cover and avatar URLs: %+v", result)
+	}
 }
 
 func TestRunShortDramaJSONIntegration(t *testing.T) {

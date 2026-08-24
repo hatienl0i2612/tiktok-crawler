@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hatienl0i2612/tiktok-crawler/media"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
 
@@ -212,6 +213,7 @@ func makeResult(inputURL, finalURL, source string, info roomInfo, streams []Stre
 			RoomID:        info.User.RoomID,
 			Status:        info.User.Status,
 			FollowerCount: info.Stats.FollowerCount,
+			AvatarURLs:    media.UniqueStrings([]string{info.User.AvatarLarger, info.User.AvatarMedium, info.User.AvatarThumb}),
 		},
 		Live: Live{
 			IsLive:      len(streams) > 0,
@@ -220,6 +222,8 @@ func makeResult(inputURL, finalURL, source string, info roomInfo, streams []Stre
 			StreamID:    info.LiveRoom.StreamID,
 			ViewerCount: info.LiveRoom.Stats.UserCount,
 			EnterCount:  info.LiveRoom.Stats.EnterCount,
+			Cover:       info.LiveRoom.CoverURL,
+			SquareCover: info.LiveRoom.SquareCoverURL,
 		},
 		Streams: streams,
 	}

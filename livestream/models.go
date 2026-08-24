@@ -7,11 +7,14 @@ type roomInfo struct {
 }
 
 type wireUser struct {
-	ID       string `json:"id"`
-	UniqueID string `json:"uniqueId"`
-	Nickname string `json:"nickname"`
-	RoomID   string `json:"roomId"`
-	Status   int    `json:"status"`
+	ID           string `json:"id"`
+	UniqueID     string `json:"uniqueId"`
+	Nickname     string `json:"nickname"`
+	RoomID       string `json:"roomId"`
+	Status       int    `json:"status"`
+	AvatarThumb  string `json:"avatarThumb"`
+	AvatarMedium string `json:"avatarMedium"`
+	AvatarLarger string `json:"avatarLarger"`
 }
 
 type wireStats struct {
@@ -23,6 +26,8 @@ type wireLiveRoom struct {
 	Status         int             `json:"status"`
 	StartTime      int64           `json:"startTime"`
 	StreamID       string          `json:"streamId"`
+	CoverURL       string          `json:"coverUrl"`
+	SquareCoverURL string          `json:"squareCoverImg"`
 	StreamData     streamContainer `json:"streamData"`
 	HEVCStreamData streamContainer `json:"hevcStreamData"`
 	Stats          wireLiveStats   `json:"liveRoomStats"`
