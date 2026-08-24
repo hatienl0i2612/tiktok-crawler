@@ -1,3 +1,24 @@
+// Package tiktokcrawler is the high-level entry point for the TikTok Crawler
+// library. It detects the kind of a TikTok URL and resolves it through the
+// specialized video, livestream, or shortdrama clients.
+//
+// # Quick start
+//
+//	config := tiktokcrawler.ClientOptions{
+//		Cookie:  "ttwid=...; sessionid=...",
+//		Headers: map[string]string{"User-Agent": "my-agent"},
+//	}
+//	client, err := tiktokcrawler.NewClient(config)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/123")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//
+// For more focused control, import the subpackages directly (video,
+// livestream, shortdrama, cookies, downloader).
 package tiktokcrawler
 
 import (
