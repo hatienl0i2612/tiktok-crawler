@@ -4,7 +4,7 @@ package video
 import (
 	"time"
 
-	"tiktok-crawler/internal/media"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
 )
 
 // DefaultUserAgent follows TikTok's mobile web path, which exposes the complete

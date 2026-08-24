@@ -3,7 +3,7 @@ package livestream
 import (
 	"time"
 
-	"tiktok-crawler/internal/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
 
 const DefaultUserAgent = tiktok.DefaultUserAgent

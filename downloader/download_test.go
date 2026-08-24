@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"tiktok-crawler/internal/media"
-	"tiktok-crawler/internal/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

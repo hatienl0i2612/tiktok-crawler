@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"tiktok-crawler/internal/media"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
 )
 
 func TestSelect(t *testing.T) {

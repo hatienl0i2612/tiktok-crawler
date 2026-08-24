@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"tiktok-crawler/internal/media"
-	"tiktok-crawler/internal/tiktok"
-	"tiktok-crawler/internal/video"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
 
 type shortDramaEpisodeResponse struct {

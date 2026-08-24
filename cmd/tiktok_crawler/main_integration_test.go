@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"tiktok-crawler/internal/livestream"
-	"tiktok-crawler/internal/shortdrama"
-	"tiktok-crawler/internal/video"
+	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
+	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
 
 func TestRunVideoJSONIntegration(t *testing.T) {

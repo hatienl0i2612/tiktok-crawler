@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tiktok-crawler/internal/media"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
 )
 
 func selectVariant(variants []media.Variant, options Options) (*media.Variant, error) {

@@ -1,4 +1,4 @@
-module tiktok-crawler
+module github.com/hatienl0i2612/tiktok-crawler
 
 go 1.25.0
 

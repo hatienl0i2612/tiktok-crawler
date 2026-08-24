@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"tiktok-crawler/internal/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 )
 
 type failingWriter struct{ err error }
@@ -38,11 +38,6 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 			name: "live flags before URL",
 			args: []string{"-verbose", "-timeout", "30s", "-headers", "User-Agent: test-agent", liveURL},
 			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", verbose: true, headers: map[string]string{"User-Agent": "test-agent"}, timeout: 30 * time.Second},
-		},
-		{
-			name: "URL flag",
-			args: []string{"-json", "-url", videoURL},
-			want: options{inputURL: videoURL, content: contentTypeVideo, quality: "best", json: true, timeout: 20 * time.Second},
 		},
 		{
 			name: "cookies from browser flag",

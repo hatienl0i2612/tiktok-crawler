@@ -2,11 +2,30 @@
 
 # TikTok Crawler
 
-Repository này cung cấp một công cụ dòng lệnh Go:
+[![Go Reference](https://pkg.go.dev/badge/github.com/hatienl0i2612/tiktok-crawler.svg)](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)
 
-- `tiktok_crawler` tự nhận diện loại URL, tải video TikTok và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
+Repository này cung cấp một thư viện Go cùng công cụ dòng lệnh:
+
+- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
+- **CLI**: `tiktok_crawler` tự nhận diện loại URL, tải video TikTok và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
 Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
+
+## Sử dụng như thư viện Go
+
+```bash
+go get github.com/hatienl0i2612/tiktok-crawler@latest
+```
+
+```go
+import "github.com/hatienl0i2612/tiktok-crawler"
+
+config := tiktokcrawler.ClientOptions{Cookie: "ttwid=...; sessionid=..."}
+client, _ := tiktokcrawler.NewClient(config)
+result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
+```
+
+Hoặc dùng trực tiếp các subpackage: `video`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 

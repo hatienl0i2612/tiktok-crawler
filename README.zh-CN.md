@@ -2,11 +2,30 @@
 
 # TikTok Crawler
 
-本仓库包含一个 Go 命令行工具：
+[![Go Reference](https://pkg.go.dev/badge/github.com/hatienl0i2612/tiktok-crawler.svg)](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)
 
-- `tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
+本仓库包含一个 Go 库和一个命令行工具：
+
+- **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
+- **CLI**：`tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
 
 该工具使用 Go 标准库，并通过 `browsercookie` 包可选地从已安装的浏览器中导入 cookie。
+
+## 作为 Go 库使用
+
+```bash
+go get github.com/hatienl0i2612/tiktok-crawler@latest
+```
+
+```go
+import "github.com/hatienl0i2612/tiktok-crawler"
+
+config := tiktokcrawler.ClientOptions{Cookie: "ttwid=...; sessionid=..."}
+client, err := tiktokcrawler.NewClient(config)
+result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
+```
+
+也可直接使用子包：`video`、`livestream`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
 
 ## 下载发行版
 

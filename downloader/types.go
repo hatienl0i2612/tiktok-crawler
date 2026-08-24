@@ -1,7 +1,7 @@
 // Package downloader selects and downloads TikTok video media.
 package downloader
 
-import "tiktok-crawler/internal/media"
+import "github.com/hatienl0i2612/tiktok-crawler/media"
 
 // DownloadProgress reports downloaded bytes and the expected total.
 type DownloadProgress struct {

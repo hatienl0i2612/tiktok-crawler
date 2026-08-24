@@ -1,6 +1,6 @@
 package shortdrama
 
-import "tiktok-crawler/internal/tiktok"
+import "github.com/hatienl0i2612/tiktok-crawler/tiktok"
 
 const maxMetadataResponseSize = 16 << 20
 

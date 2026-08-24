@@ -15,14 +15,14 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"tiktok-crawler/internal/cliargs"
-	"tiktok-crawler/internal/cookies"
-	"tiktok-crawler/internal/downloader"
-	"tiktok-crawler/internal/livestream"
-	"tiktok-crawler/internal/media"
-	"tiktok-crawler/internal/shortdrama"
-	"tiktok-crawler/internal/tiktok"
-	"tiktok-crawler/internal/video"
+	"github.com/hatienl0i2612/tiktok-crawler/cliargs"
+	"github.com/hatienl0i2612/tiktok-crawler/cookies"
+	"github.com/hatienl0i2612/tiktok-crawler/downloader"
+	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
 
 const videoRequestTimeout = 5 * time.Minute
@@ -140,7 +140,6 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	var headerValues stringListFlag
 	flags := flag.NewFlagSet("tiktok_crawler", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	flags.StringVar(&options.inputURL, "url", "", "TikTok video, Short Drama episode, or LIVE URL (may also be supplied as the final argument)")
 	flags.BoolVar(&options.json, "json", false, "print resolved metadata as JSON")
 	flags.StringVar(&options.output, "output", "", "video download destination (ignored for LIVE URLs)")
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for LIVE URLs)")
@@ -155,18 +154,14 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		flags.PrintDefaults()
 	}
 
-	if err := flags.Parse(cliargs.ReorderInterspersedFlags(args, "url", "output", "quality", "cookies-file", "cookies-from-browser", "headers", "timeout")); err != nil {
+	if err := flags.Parse(cliargs.ReorderInterspersedFlags(args, "output", "quality", "cookies-file", "cookies-from-browser", "headers", "timeout")); err != nil {
 		return options, err
 	}
-	if options.inputURL == "" {
-		if flags.NArg() != 1 {
-			flags.Usage()
-			return options, errors.New("exactly one TikTok video, Short Drama episode, or LIVE URL is required")
-		}
-		options.inputURL = flags.Arg(0)
-	} else if flags.NArg() != 0 {
-		return options, errors.New("do not pass the URL through both -url and the final argument")
+	if flags.NArg() != 1 {
+		flags.Usage()
+		return options, errors.New("exactly one TikTok video, Short Drama episode, or LIVE URL is required")
 	}
+	options.inputURL = flags.Arg(0)
 
 	content, err := detectContentType(options.inputURL)
 	if err != nil {

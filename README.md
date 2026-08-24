@@ -2,11 +2,67 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
 # TikTok Crawler
 
-This repository contains one Go command-line tool:
+[![Go Reference](https://pkg.go.dev/badge/github.com/hatienl0i2612/tiktok-crawler.svg)](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)
 
-- `tiktok_crawler` detects the URL type, downloads public TikTok videos and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
+This repository contains a Go library plus a command-line tool:
 
-The command uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
+- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
+- **CLI**: `tiktok_crawler` detects the URL type, downloads public TikTok videos and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
+
+The code uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
+
+## Use as a Go library
+
+Add the module to your project:
+
+```bash
+go get github.com/hatienl0i2612/tiktok-crawler@latest
+```
+
+Then resolve any supported TikTok URL with the high-level client:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/hatienl0i2612/tiktok-crawler"
+)
+
+func main() {
+	config := tiktokcrawler.ClientOptions{
+		Cookie:  "ttwid=...; sessionid=...",                                  // optional
+		Headers: map[string]string{"User-Agent": "my-custom-agent"},          // optional
+	}
+	client, err := tiktokcrawler.NewClient(config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	result, err := client.Resolve(context.Background(), "https://www.tiktok.com/@example/video/1234567890123456789")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("kind: %s, final_url: %s\n", result.Kind, result.Video.FinalURL)
+}
+```
+
+For more focused control, use the subpackages directly:
+
+```go
+import (
+	"github.com/hatienl0i2612/tiktok-crawler/video"       // video.Result, video.Video, ...
+	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
+	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"  // shortdrama.Result, ...
+	"github.com/hatienl0i2612/tiktok-crawler/cookies"     // cookies.LoadTikTokCookieHeader, ...
+	"github.com/hatienl0i2612/tiktok-crawler/downloader"  // downloader.Download, ...
+)
+```
+
+Published module versions follow semantic versioning via Git tags (for example `v0.1.0`); the API is documented on [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Download a release
 
