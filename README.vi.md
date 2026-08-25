@@ -73,6 +73,8 @@ Tải video chất lượng tốt nhất hiện có không kèm watermark (hành
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
+TikTok cũng dùng URL `/video/<id>` cho Story dạng video. Khi player API không trả Story, resolver sẽ đọc metadata embed và `playAddr` mà trang web TikTok dùng để phát video; JSON output có thêm `"is_story": true`. `playAddr` là source mặc định không có TikTok watermark, còn `-watermark` chọn `downloadAddr`. Story công khai còn hiệu lực không cần cookie trình duyệt.
+
 Thay `example` và `1234567890123456789` bằng username và video ID trong URL TikTok mà bạn muốn thu thập.
 
 Output mẫu khi tải video không có watermark:
@@ -124,6 +126,8 @@ Tải tất cả ảnh trong Photo Post theo đúng thứ tự của bài đăng
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
 ```
+
+TikTok cũng dùng URL `/photo/<id>` cho Story dạng ảnh. Khi player API không trả Story, resolver sẽ tự động đọc embed metadata của TikTok; JSON output có thêm `"is_story": true`. Story công khai còn hiệu lực không cần cookie trình duyệt.
 
 Hãy thay `example` và `1234567890123456789` bằng username và Photo Post ID trong URL TikTok cần thu thập. Mặc định, ảnh được lưu vào thư mục mới `<username>_<photo-id>_images/` trong thư mục hiện tại. Dùng `-output` để chọn thư mục đích; tool sẽ tạo thư mục nếu cần:
 

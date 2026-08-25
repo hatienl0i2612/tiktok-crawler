@@ -73,6 +73,8 @@ chmod +x tiktok_crawler-darwin-arm64
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
+TikTok 也会将 `/video/<id>` URL 用于视频 Story。当 player API 不返回 Story 时，解析器会读取 TikTok 的 embed 元数据以及网页播放器使用的 `playAddr`；JSON 输出会包含 `"is_story": true`。默认选择无 TikTok 水印的 `playAddr`，`-watermark` 则选择 `downloadAddr`。仍可公开访问的 Story 无需浏览器 Cookie。
+
 请将 `example` 和 `1234567890123456789` 替换为目标 TikTok URL 中的用户名和视频 ID。
 
 下载无水印视频时的输出示例：
@@ -124,6 +126,8 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
 ```
+
+TikTok 也会将 `/photo/<id>` URL 用于图片 Story。当 player API 不返回 Story 时，解析器会自动改用 TikTok 的 embed 元数据；JSON 输出会包含 `"is_story": true`。仍可公开访问的 Story 无需浏览器 Cookie。
 
 请将 `example` 和 `1234567890123456789` 替换为目标 TikTok URL 中的用户名和图文帖 ID。默认情况下，图片会保存到当前工作目录中新建的 `<username>_<photo-id>_images/` 目录。使用 `-output` 指定输出目录；如有需要，工具会自动创建该目录：
 

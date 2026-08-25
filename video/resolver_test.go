@@ -125,6 +125,133 @@ func TestResolveVideo(t *testing.T) {
 	}
 }
 
+func TestResolveVideoStoryFromEmbedFallback(t *testing.T) {
+	t.Parallel()
+
+	const storyID = "7677833204639845648"
+	playbackURLs := []string{
+		"https://v16-webapp-prime.tiktok.com/story-play.mp4?expire=1787835377&signature=one",
+		"https://v16-webapp-prime.tiktok.com/story-play.mp4?expire=1787835377&signature=two",
+		"https://v16-webapp-prime.tiktok.com/story-play.mp4?expire=1787835377&signature=three",
+	}
+	downloadURLs := []string{
+		"https://v16-webapp-prime.tiktok.com/story-download.mp4?expire=1787835377&signature=one",
+		"https://v16-webapp-prime.tiktok.com/story-download.mp4?expire=1787835377&signature=two",
+		"https://v16-webapp-prime.tiktok.com/story-download.mp4?expire=1787835377&signature=three",
+	}
+	embedURL := "https://vx-bdp.tiktokv.com/story-download.mp4?x-m-expire=1787835377"
+	audioURL := "https://sf16-ies-music-sg.tiktokcdn.com/story-audio"
+
+	var embedState frontityState
+	embedState.Source.Data = map[string]embedPageData{
+		"/embed/v2/" + storyID: {
+			Code: http.StatusOK,
+			VideoData: embedVideoData{
+				ItemInfos: embedItem{
+					ID:              storyID,
+					CreateTime:      "1787634903",
+					AuthorID:        "7497922275690284039",
+					Covers:          []string{"https://p16-common-sign.tiktokcdn.com/story-cover.jpeg"},
+					CoversOrigin:    []string{"https://p16-common-sign.tiktokcdn.com/story-origin.jpeg"},
+					CoversDynamic:   []string{"https://p16-common-sign.tiktokcdn.com/story-dynamic.jpeg"},
+					DiggCount:       3,
+					PlayCount:       40,
+					LocationCreated: "VN",
+					Video: embedVideo{
+						URLs:      []string{embedURL},
+						VideoMeta: embedVideoMeta{Width: 576, Height: 1024, Duration: 60},
+					},
+				},
+				AuthorInfos: embedAuthor{
+					SecUID:   "author-secret",
+					UserID:   "7497922275690284039",
+					UniqueID: "qk09.music6",
+					Nickname: "Quang Khải",
+				},
+				AuthorStats: embedAuthorStatistics{FollowerCount: 1977, HeartCount: 78700},
+				MusicInfos: embedMusic{
+					MusicID:    "7669516689050388497",
+					MusicName:  "Căn Nhà Tranh Mái Lá",
+					AuthorName: "Alone",
+					PlayURL:    []string{audioURL},
+				},
+			},
+		},
+	}
+	embedJSON, err := json.Marshal(embedState)
+	if err != nil {
+		t.Fatalf("marshal embed fixture: %v", err)
+	}
+	embedBody := []byte(`<script id="__FRONTITY_CONNECT_STATE__">` + string(embedJSON) + `</script>`)
+	playerBody := []byte(`{"status_code":0,"status_msg":"","items":[]}`)
+
+	client, err := NewClient(ClientOptions{})
+	if err != nil {
+		t.Fatalf("create client: %v", err)
+	}
+	pageRequests, playerRequests, embedRequests := 0, 0, 0
+	client.session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var body []byte
+		switch request.URL.Path {
+		case "/@qk09.music6/video/" + storyID:
+			pageRequests++
+			index := pageRequests - 1
+			body = []byte(`<script id="api-data" type="application/json">{"videoDetail":{"itemInfo":{"itemStruct":{"video":{"playAddr":"` + playbackURLs[index] + `","downloadAddr":"` + downloadURLs[index] + `"}}}}}</script>`)
+		case "/player/api/v1/items":
+			playerRequests++
+			body = playerBody
+		case "/embed/v2/" + storyID:
+			embedRequests++
+			body = embedBody
+		default:
+			return nil, errors.New("unexpected request: " + request.URL.String())
+		}
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Header:        make(http.Header),
+			Body:          io.NopCloser(strings.NewReader(string(body))),
+			ContentLength: int64(len(body)),
+			Request:       request,
+		}, nil
+	})
+
+	inputURL := "https://www.tiktok.com/@qk09.music6/video/" + storyID
+	result, err := client.Resolve(context.Background(), inputURL)
+	if err != nil {
+		t.Fatalf("resolve video Story: %v", err)
+	}
+	if pageRequests != maxVideoPageAttempts || playerRequests != 1 || embedRequests != 1 {
+		t.Fatalf("requests: page=%d player=%d embed=%d", pageRequests, playerRequests, embedRequests)
+	}
+	if !result.IsStory || len(result.Sources) != 2 || result.Sources[0] != "embed/v2" || result.Sources[1] != "video page" {
+		t.Fatalf("unexpected Story source metadata: %+v", result)
+	}
+	if result.Video.ID != storyID || result.Video.Author.UniqueID != "qk09.music6" || result.Video.CreatedAt == nil {
+		t.Fatalf("unexpected Story metadata: %+v", result.Video)
+	}
+	if result.Video.Width != 576 || result.Video.Height != 1024 || result.Video.Duration != 60 || result.Video.Statistics.PlayCount != 40 {
+		t.Fatalf("unexpected Story video metadata: %+v", result.Video)
+	}
+	if len(result.Video.Music.PlaybackURLs) != 1 || result.Video.Music.PlaybackURLs[0] != audioURL {
+		t.Fatalf("unexpected Story music: %+v", result.Video.Music)
+	}
+	if len(result.Media) != 2 {
+		t.Fatalf("unexpected Story media: %+v", result.Media)
+	}
+	playback := result.Media[0]
+	if playback.URL != playbackURLs[2] || playback.Watermarked || playback.Codec != "h264" || playback.Format != "mp4" || playback.Width != 576 || playback.Height != 1024 || playback.ExpiresAt == nil {
+		t.Fatalf("unexpected Story playback media: %+v", playback)
+	}
+	if len(playback.BackupURLs) != 2 || playback.BackupURLs[0] != playbackURLs[1] || playback.BackupURLs[1] != playbackURLs[0] {
+		t.Fatalf("unexpected Story playback backups: %+v", playback)
+	}
+	watermarked := result.Media[1]
+	if watermarked.URL != downloadURLs[2] || !watermarked.Watermarked || len(watermarked.BackupURLs) != 3 || watermarked.BackupURLs[0] != downloadURLs[1] || watermarked.BackupURLs[1] != downloadURLs[0] || watermarked.BackupURLs[2] != embedURL {
+		t.Fatalf("unexpected Story watermarked media: %+v", watermarked)
+	}
+}
+
 func TestVideoIDFromURL(t *testing.T) {
 	t.Parallel()
 
@@ -196,6 +323,10 @@ func TestExtractDownloadURLs(t *testing.T) {
 	html = append(html, []byte(`</script>`)...)
 	if got := extractDownloadURLsFromHTML(html); len(got) != 2 {
 		t.Fatalf("HTML download URLs: %v", got)
+	}
+	mediaURLs := extractMediaURLsFromHTML(html)
+	if len(mediaURLs.Playback) != 1 || mediaURLs.Playback[0] != "https://v16.tiktokcdn.com/not-a-download.mp4" {
+		t.Fatalf("HTML playback URLs: %v", mediaURLs.Playback)
 	}
 	if got := extractDownloadURLs([]byte(`{`)); got != nil {
 		t.Fatalf("invalid JSON returned URLs: %v", got)

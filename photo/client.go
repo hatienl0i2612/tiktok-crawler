@@ -7,13 +7,13 @@ import (
 
 const maxMetadataResponseSize = 16 << 20
 
-// Client resolves TikTok Photo Posts using the same mobile web session as the
-// regular video resolver.
+// Client resolves TikTok Photo Posts and photo Stories using the same mobile
+// web session as the regular video resolver.
 type Client struct {
 	session *tiktok.Session
 }
 
-// NewClient creates a TikTok Photo Post client. The supplied cookie is optional.
+// NewClient creates a TikTok photo client. The supplied cookie is optional.
 func NewClient(options ClientOptions) (*Client, error) {
 	videoClient, err := video.NewClient(video.ClientOptions(options))
 	if err != nil {
@@ -22,7 +22,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	return &Client{session: videoClient.Session()}, nil
 }
 
-// Session returns the HTTP session used to resolve and download Photo Post images.
+// Session returns the HTTP session used to resolve and download photo images.
 func (client *Client) Session() *tiktok.Session {
 	return client.session
 }

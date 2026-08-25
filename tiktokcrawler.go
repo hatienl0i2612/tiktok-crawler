@@ -45,9 +45,9 @@ var (
 type Kind string
 
 const (
-	// KindVideo is a regular TikTok video post.
+	// KindVideo is a TikTok video post or video Story under a /video/<id> URL.
 	KindVideo Kind = "video"
-	// KindPhoto is a TikTok Photo Post.
+	// KindPhoto is a TikTok Photo Post or photo Story under a /photo/<id> URL.
 	KindPhoto Kind = "photo"
 	// KindLive is a TikTok LIVE room.
 	KindLive Kind = "livestream"

@@ -111,6 +111,8 @@ Download the best available video without a watermark (the default behavior):
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
 ```
 
+TikTok also uses `/video/<id>` URLs for video Stories. When the player API omits a Story, the resolver reads TikTok's embed metadata and the page `playAddr` used by the web player; JSON output includes `"is_story": true`. The no-watermark `playAddr` is selected by default, while `-watermark` selects `downloadAddr`. No browser cookie is required for a public Story that is still available.
+
 Replace `example` and `1234567890123456789` with the username and video ID from the TikTok URL you want to crawl.
 
 Sample output for a video without a watermark:
@@ -162,6 +164,8 @@ Download every image in a Photo Post in its original post order:
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
 ```
+
+TikTok also uses `/photo/<id>` URLs for photo Stories. When the player API omits a Story, the resolver automatically reads TikTok's embed metadata instead; JSON output includes `"is_story": true`. No browser cookie is required for a public Story that is still available.
 
 Replace `example` and `1234567890123456789` with the username and Photo Post ID from the URL you want to crawl. By default, the images are stored in a new `<username>_<photo-id>_images/` directory in the current working directory. Use `-output` to choose the output directory; it is created when necessary:
 

@@ -34,12 +34,8 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	}
 
 	videoID := videoIDFromURL(inputURL)
-	pageBody, fetchedURL, pageErr := client.fetchMetadata(
-		ctx,
-		inputURL.String(),
-		"text/html,application/xhtml+xml",
-		"",
-	)
+	pageMediaURLs, fetchedURL, pageErr := client.fetchPageMedia(ctx, inputURL.String())
+	pageAttempts := 1
 	finalURL := inputURL.String()
 	if fetchedURL != "" {
 		if parsedFinal, parseErr := url.Parse(fetchedURL); parseErr == nil {
@@ -57,28 +53,58 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		}
 		return nil, errors.New("URL must contain a TikTok /video/<id> path or redirect to one")
 	}
-	pageDownloadURLs := extractDownloadURLsFromHTML(pageBody)
-	for attempt := 1; len(pageDownloadURLs) == 0 && attempt < maxVideoPageAttempts; attempt++ {
-		retryBody, retryURL, retryErr := client.fetchMetadata(
-			ctx,
-			finalURL,
-			"text/html,application/xhtml+xml",
-			"",
-		)
+	for len(pageMediaURLs.Download) == 0 && pageAttempts < maxVideoPageAttempts {
+		pageAttempts++
+		retryMediaURLs, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
 		if retryErr != nil {
 			continue
 		}
 		pageErr = nil
-		pageBody = retryBody
 		if parsedRetry, parseErr := url.Parse(retryURL); parseErr == nil && videoIDFromURL(parsedRetry) == videoID {
 			finalURL = retryURL
 		}
-		pageDownloadURLs = extractDownloadURLsFromHTML(pageBody)
+		pageMediaURLs = mergeExtractedMediaURLs(retryMediaURLs, pageMediaURLs)
 	}
 
 	player, playerBody, err := client.fetchPlayer(ctx, videoID, finalURL)
 	if err != nil {
 		return nil, err
+	}
+	if len(player.Items) == 0 {
+		// TikTok occasionally emits a signed Story URL that always returns 403.
+		// Collect independently signed page URLs so the downloader can fall back
+		// without silently switching to the watermarked embed object.
+		for pageAttempts < maxVideoPageAttempts {
+			pageAttempts++
+			retryMediaURLs, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
+			if retryErr != nil {
+				continue
+			}
+			pageErr = nil
+			if parsedRetry, parseErr := url.Parse(retryURL); parseErr == nil && videoIDFromURL(parsedRetry) == videoID {
+				finalURL = retryURL
+			}
+			pageMediaURLs = mergeExtractedMediaURLs(retryMediaURLs, pageMediaURLs)
+		}
+		embed, embedErr := client.fetchEmbed(ctx, videoID, finalURL)
+		if embedErr != nil {
+			return nil, fmt.Errorf("TikTok player returned no video item and the Story embed fallback failed: %w", embedErr)
+		}
+		result := buildEmbedResult(inputURL.String(), finalURL, embed, true)
+		if pageErr != nil {
+			result.Warnings = append(result.Warnings, "video page unavailable: "+pageErr.Error())
+		}
+		if len(pageMediaURLs.Playback) > 0 || len(pageMediaURLs.Download) > 0 {
+			result.Sources = append(result.Sources, "video page")
+		}
+		appendPlaybackMedia(result, pageMediaURLs.Playback)
+		watermarkedURLs := append(append([]string{}, pageMediaURLs.Download...), embed.ItemInfos.Video.URLs...)
+		appendWatermarkedMedia(result, uniqueStrings(watermarkedURLs))
+		sortMedia(result.Media)
+		if len(result.Media) == 0 {
+			return nil, errors.New("TikTok returned Story metadata but no downloadable video")
+		}
+		return result, nil
 	}
 	result := buildPlayerResult(inputURL.String(), finalURL, player.Items[0])
 	result.Sources = append(result.Sources, "player/api/v1/items")
@@ -95,9 +121,9 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	}
 
 	downloadURLs := extractDownloadURLs(playerBody)
-	if len(pageDownloadURLs) > 0 {
+	if len(pageMediaURLs.Download) > 0 {
 		result.Sources = append(result.Sources, "video page")
-		downloadURLs = append(downloadURLs, pageDownloadURLs...)
+		downloadURLs = append(downloadURLs, pageMediaURLs.Download...)
 	}
 	appendWatermarkedMedia(result, uniqueStrings(downloadURLs))
 	sortMedia(result.Media)
@@ -105,6 +131,16 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		return nil, errors.New("TikTok returned metadata but no downloadable media profiles")
 	}
 	return result, nil
+}
+
+func (client *Client) fetchPageMedia(ctx context.Context, target string) (extractedMediaURLs, string, error) {
+	body, finalURL, err := client.fetchMetadata(
+		ctx,
+		target,
+		"text/html,application/xhtml+xml",
+		"",
+	)
+	return extractMediaURLsFromHTML(body), finalURL, err
 }
 
 func (client *Client) fetchPlayer(
@@ -130,7 +166,7 @@ func (client *Client) fetchPlayer(
 		)
 	}
 	if len(response.Items) == 0 {
-		return playerResponse{}, body, errors.New("TikTok player returned no video item")
+		return response, body, nil
 	}
 	resolvedID := response.Items[0].IDStr
 	if resolvedID == "" {
@@ -272,6 +308,39 @@ func buildPlayerResult(inputURL, finalURL string, item playerItem) *Result {
 	}
 	result.Media = makePlaybackMedia(item.VideoInfo)
 	return result
+}
+
+func buildEmbedResult(inputURL, finalURL string, source embedVideoData, isStory bool) *Result {
+	result := &Result{
+		InputURL:  inputURL,
+		FinalURL:  finalURL,
+		Sources:   []string{"embed/v2"},
+		FetchedAt: time.Now().UTC(),
+		IsStory:   isStory,
+		Video:     Video{ID: source.ItemInfos.ID},
+	}
+	mergeEmbedMetadata(&result.Video, source)
+	return result
+}
+
+func appendPlaybackMedia(result *Result, urls []string) {
+	urls = uniqueStrings(urls)
+	if len(urls) == 0 {
+		return
+	}
+	result.Media = append(result.Media, Media{
+		Type:        "video",
+		Kind:        "playback",
+		Watermarked: false,
+		Codec:       "h264",
+		Format:      "mp4",
+		Quality:     qualityName(result.Video.Height),
+		Width:       result.Video.Width,
+		Height:      result.Video.Height,
+		URL:         urls[0],
+		BackupURLs:  urls[1:],
+		ExpiresAt:   expiryFromURL(urls[0]),
+	})
 }
 
 func makePlaybackMedia(video playerVideoInfo) []Media {
@@ -462,8 +531,28 @@ func appendWatermarkedMedia(result *Result, urls []string) {
 	})
 }
 
-func extractDownloadURLsFromHTML(body []byte) []string {
-	var result []string
+type extractedMediaURLs struct {
+	Playback []string
+	Download []string
+}
+
+func mergeExtractedMediaURLs(preferred, fallback extractedMediaURLs) extractedMediaURLs {
+	return extractedMediaURLs{
+		Playback: uniqueStrings(append(preferred.Playback, fallback.Playback...)),
+		Download: uniqueStrings(append(preferred.Download, fallback.Download...)),
+	}
+}
+
+type mediaURLKind uint8
+
+const (
+	mediaURLNone mediaURLKind = iota
+	mediaURLPlayback
+	mediaURLDownload
+)
+
+func extractMediaURLsFromHTML(body []byte) extractedMediaURLs {
+	var result extractedMediaURLs
 	for _, match := range jsonScriptPattern.FindAllSubmatch(body, -1) {
 		if len(match) != 2 {
 			continue
@@ -472,44 +561,68 @@ func extractDownloadURLsFromHTML(body []byte) []string {
 		if len(content) == 0 || (content[0] != '{' && content[0] != '[') {
 			continue
 		}
-		result = append(result, extractDownloadURLs(content)...)
+		extracted := extractMediaURLs(content)
+		result.Playback = append(result.Playback, extracted.Playback...)
+		result.Download = append(result.Download, extracted.Download...)
 	}
-	return uniqueStrings(result)
+	result.Playback = uniqueStrings(result.Playback)
+	result.Download = uniqueStrings(result.Download)
+	return result
+}
+
+func extractDownloadURLsFromHTML(body []byte) []string {
+	return extractMediaURLsFromHTML(body).Download
 }
 
 func extractDownloadURLs(body []byte) []string {
+	return extractMediaURLs(body).Download
+}
+
+func extractMediaURLs(body []byte) extractedMediaURLs {
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	if err := decoder.Decode(&value); err != nil {
-		return nil
+		return extractedMediaURLs{}
 	}
-	var result []string
-	walkDownloadFields(value, false, &result)
-	result = uniqueStrings(result)
-	sort.Strings(result)
+	var result extractedMediaURLs
+	walkMediaFields(value, mediaURLNone, &result)
+	result.Playback = uniqueStrings(result.Playback)
+	result.Download = uniqueStrings(result.Download)
+	sort.Strings(result.Playback)
+	sort.Strings(result.Download)
 	return result
 }
 
-func walkDownloadFields(value any, collect bool, result *[]string) {
+func walkMediaFields(value any, kind mediaURLKind, result *extractedMediaURLs) {
 	switch typed := value.(type) {
 	case map[string]any:
 		for key, child := range typed {
 			normalized := strings.ToLower(strings.ReplaceAll(key, "_", ""))
-			isDownloadField := normalized == "downloadaddr" || normalized == "downloadurl"
-			walkDownloadFields(child, collect || isDownloadField, result)
+			childKind := kind
+			switch normalized {
+			case "playaddr":
+				childKind = mediaURLPlayback
+			case "downloadaddr", "downloadurl":
+				childKind = mediaURLDownload
+			}
+			walkMediaFields(child, childKind, result)
 		}
 	case []any:
 		for _, child := range typed {
-			walkDownloadFields(child, collect, result)
+			walkMediaFields(child, kind, result)
 		}
 	case string:
-		if !collect {
+		if kind == mediaURLNone {
 			return
 		}
 		parsed, err := url.Parse(strings.TrimSpace(typed))
 		if err == nil && parsed.Scheme == "https" && tiktok.IsAllowedHost(parsed.Hostname()) {
-			*result = append(*result, parsed.String())
+			if kind == mediaURLPlayback {
+				result.Playback = append(result.Playback, parsed.String())
+			} else {
+				result.Download = append(result.Download, parsed.String())
+			}
 		}
 	}
 }

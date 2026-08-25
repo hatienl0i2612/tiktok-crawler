@@ -1,4 +1,5 @@
-// Package video resolves TikTok video metadata and downloadable media.
+// Package video resolves TikTok video posts and video Stories and returns their
+// downloadable media.
 package video
 
 import (
@@ -20,15 +21,19 @@ type ClientOptions struct {
 	Headers map[string]string
 }
 
-// Result contains normalized video metadata and every downloadable media variant.
+// Result contains normalized video post or video Story metadata and every
+// downloadable media variant.
 type Result struct {
 	InputURL  string    `json:"input_url"`
 	FinalURL  string    `json:"final_url"`
 	Sources   []string  `json:"sources"`
 	FetchedAt time.Time `json:"fetched_at"`
 	Warnings  []string  `json:"warnings,omitempty"`
-	Video     Video     `json:"video"`
-	Media     []Media   `json:"media"`
+	// IsStory is true when TikTok's player omits the item and the /video URL
+	// resolves through the video Story embed fallback.
+	IsStory bool    `json:"is_story,omitempty"`
+	Video   Video   `json:"video"`
+	Media   []Media `json:"media"`
 }
 
 // Video describes a TikTok post and its related public metadata.

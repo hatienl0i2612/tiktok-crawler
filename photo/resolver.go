@@ -19,7 +19,7 @@ import (
 
 var photoPathPattern = regexp.MustCompile(`^/@[^/]+/photo/([0-9]+)/?$`)
 
-// Resolve crawls a TikTok Photo Post and returns its images in post order.
+// Resolve crawls a TikTok Photo Post or photo Story and returns its images in display order.
 func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, error) {
 	if client == nil || client.session == nil {
 		return nil, errors.New("TikTok Photo Post client is not configured")
@@ -46,7 +46,15 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		return nil, fmt.Errorf("TikTok player returned status %d: %s", response.StatusCode, response.StatusMsg)
 	}
 	if len(response.Items) == 0 {
-		return nil, errors.New("TikTok player returned no Photo Post item")
+		embed, embedErr := client.fetchEmbedPhoto(ctx, photoID, inputURL.String())
+		if embedErr != nil {
+			return nil, fmt.Errorf("TikTok player returned no Photo Post item and the Story embed fallback failed: %w", embedErr)
+		}
+		result := buildEmbedResult(inputURL.String(), embed, true)
+		if len(result.Images) == 0 {
+			return nil, errors.New("TikTok returned Story metadata but no downloadable images")
+		}
+		return result, nil
 	}
 	item := response.Items[0]
 	resolvedID := item.IDStr
@@ -55,10 +63,6 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	}
 	if resolvedID != "" && resolvedID != photoID {
 		return nil, fmt.Errorf("TikTok player returned Photo Post %s instead of %s", resolvedID, photoID)
-	}
-	images := makeImages(item.ImagePostInfo.Images)
-	if len(images) == 0 {
-		return nil, errors.New("TikTok returned metadata but no downloadable Photo Post images")
 	}
 	result := &Result{
 		InputURL:  inputURL.String(),
@@ -82,13 +86,19 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 			},
 			Music: video.Music{ID: item.MusicInfo.IDStr, Title: item.MusicInfo.Title, Author: item.MusicInfo.Author},
 		},
-		Images: images,
+		Images: makeImages(item.ImagePostInfo.Images),
 	}
-	if music, embedErr := video.FetchEmbedMusic(ctx, client.session, photoID, inputURL.String()); embedErr == nil {
-		mergeMusic(&result.Post.Music, music)
+	if embed, embedErr := client.fetchEmbedPhoto(ctx, photoID, inputURL.String()); embedErr == nil {
+		mergeEmbedMetadata(&result.Post, embed)
+		if len(result.Images) == 0 {
+			result.Images = makeEmbedImages(embed.ImagePostInfo.DisplayImages)
+		}
 		result.Sources = append(result.Sources, "embed/v2")
 	} else {
-		result.Warnings = append(result.Warnings, "embed music metadata unavailable: "+embedErr.Error())
+		result.Warnings = append(result.Warnings, "embed metadata unavailable: "+embedErr.Error())
+	}
+	if len(result.Images) == 0 {
+		return nil, errors.New("TikTok returned metadata but no downloadable Photo Post images")
 	}
 	return result, nil
 }
