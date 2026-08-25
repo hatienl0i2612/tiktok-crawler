@@ -6,8 +6,8 @@
 
 Repository này cung cấp một thư viện Go cùng công cụ dòng lệnh:
 
-- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
-- **CLI**: `tiktok_crawler` tự nhận diện loại URL, tải video TikTok và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
+- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
+- **CLI**: `tiktok_crawler` tự nhận diện loại URL, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
 Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
 
@@ -25,7 +25,7 @@ client, _ := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-Hoặc dùng trực tiếp các subpackage: `video`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
+Hoặc dùng trực tiếp các subpackage: `video`, `photo`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 
@@ -116,6 +116,24 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ không bao giờ bị ghi đè; hãy chọn đường dẫn `-output` khác khi cần. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
+
+## Photo Post
+
+Tải tất cả ảnh trong Photo Post theo đúng thứ tự của bài đăng:
+
+```bash
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
+```
+
+Hãy thay `example` và `1234567890123456789` bằng username và Photo Post ID trong URL TikTok cần thu thập. Mặc định, ảnh được lưu vào thư mục mới `<username>_<photo-id>_images/` trong thư mục hiện tại. Dùng `-output` để chọn thư mục đích; tool sẽ tạo thư mục nếu cần:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -output '~/Downloads/tiktok-photo-post' \
+  'https://www.tiktok.com/@example/photo/1234567890123456789'
+```
+
+Dùng `-json` để in metadata bài đăng, signed image URL và signed audio playback URL khi TikTok cung cấp, mà không tải. `-quality` bị bỏ qua cho Photo Post vì TikTok chỉ cung cấp một display image cho mỗi ảnh trong bài. Một số Photo Post có thể công bố image source watermark chính thức; `-watermark` yêu cầu đúng source đó và trả lỗi thay vì âm thầm tải ảnh không watermark khi source không tồn tại.
 
 ## Tập Short Drama
 

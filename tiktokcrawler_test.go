@@ -14,6 +14,7 @@ func TestDetectKind(t *testing.T) {
 	}{
 		{"https://www.tiktok.com/@example/video/1234567890123456789", KindVideo, false},
 		{"https://www.tiktok.com/@example/video/1234567890123456789?lang=en", KindVideo, false},
+		{"https://www.tiktok.com/@example/photo/1234567890123456789", KindPhoto, false},
 		{"https://www.tiktok.com/@example/live", KindLive, false},
 		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", KindShortDrama, false},
 		{"https://example.com/@example/video/123", "", true},
@@ -38,8 +39,8 @@ func TestNewClientExposesSubClients(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	if client.Video() == nil || client.Livestream() == nil || client.ShortDrama() == nil {
-		t.Fatal("NewClient must expose all three sub-clients")
+	if client.Video() == nil || client.Photo() == nil || client.Livestream() == nil || client.ShortDrama() == nil {
+		t.Fatal("NewClient must expose all sub-clients")
 	}
 }
 

@@ -64,11 +64,20 @@ func TestDownloadUsesBackupAndReportsProgress(t *testing.T) {
 
 func TestDownloadHelpers(t *testing.T) {
 	t.Parallel()
-	if !looksLikeVideo("video/mp4; charset=binary", nil) || !looksLikeVideo("application/octet-stream", []byte{0, 0, 0, 20, 'f', 't', 'y', 'p'}) {
+	if !looksLikeMedia("video", "video/mp4; charset=binary", nil) || !looksLikeMedia("video", "application/octet-stream", []byte{0, 0, 0, 20, 'f', 't', 'y', 'p'}) {
 		t.Fatal("video response was not recognized")
 	}
-	if looksLikeVideo("text/html", []byte("<html>")) {
+	if looksLikeMedia("video", "text/html", []byte("<html>")) {
 		t.Fatal("HTML was recognized as video")
+	}
+	if !looksLikeMedia("image", "image/jpeg", nil) || !looksLikeMedia("image", "application/octet-stream", []byte{0xff, 0xd8, 0xff, 0xe0}) {
+		t.Fatal("image response was not recognized")
+	}
+	if !looksLikeMedia("image", "application/octet-stream", []byte{0, 0, 0, 20, 'f', 't', 'y', 'p', 'a', 'v', 'i', 'f'}) {
+		t.Fatal("AVIF image response was not recognized")
+	}
+	if looksLikeMedia("image", "text/html", []byte("<html>")) {
+		t.Fatal("HTML was recognized as image")
 	}
 	if got := sanitizeFilenamePart("  bad///name...  "); got != "bad_name" {
 		t.Fatalf("sanitizeFilenamePart() = %q", got)
@@ -84,6 +93,69 @@ func TestDownloadHelpers(t *testing.T) {
 	filename := defaultFilename(FileInfo{Author: " @creator name ", VideoID: "123/456"}, &media.Variant{Quality: "1080p", Codec: "h264", Format: "mp4"})
 	if filename != "creator_name_123_456_no_watermark_1080p_h264.mp4" {
 		t.Fatalf("DefaultFilename() = %q", filename)
+	}
+}
+
+func TestDownloadAllDownloadsImageCollection(t *testing.T) {
+	t.Parallel()
+	payloads := map[string][]byte{
+		"/one": {0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4},
+		"/two": {0xff, 0xd8, 0xff, 0xe0, 5, 6, 7, 8},
+	}
+	session, err := tiktok.NewSession(tiktok.SessionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		payload, ok := payloads[request.URL.Path]
+		if !ok {
+			t.Fatalf("unexpected URL: %s", request.URL)
+		}
+		if request.Header.Get("Referer") != "https://www.tiktok.com/@creator/photo/123" {
+			t.Fatalf("unexpected Referer: %q", request.Header.Get("Referer"))
+		}
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Header:        http.Header{"Content-Type": []string{"image/jpeg"}},
+			Body:          io.NopCloser(bytes.NewReader(payload)),
+			ContentLength: int64(len(payload)),
+			Request:       request,
+		}, nil
+	})
+
+	outputDirectory := filepath.Join(t.TempDir(), "images")
+	var starts []BatchStart
+	var progress []BatchProgress
+	result, err := DownloadAll(context.Background(), session, []BatchItem{
+		{Variants: []media.Variant{{Type: "image", Format: "jpeg", Quality: "1350p", URL: "https://v16.tiktokcdn.com/one"}}},
+		{Variants: []media.Variant{{Type: "image", Format: "jpeg", Quality: "1350p", URL: "https://v16.tiktokcdn.com/two"}}},
+	}, FileInfo{Author: "creator", VideoID: "123", Referer: "https://www.tiktok.com/@creator/photo/123"}, BatchOptions{
+		OutputDir: outputDirectory,
+		OnStart: func(start BatchStart) {
+			starts = append(starts, start)
+		},
+		Progress: func(update BatchProgress) {
+			progress = append(progress, update)
+		},
+	})
+	if err != nil {
+		t.Fatalf("DownloadAll: %v", err)
+	}
+	if len(result.Downloads) != 2 || len(starts) != 2 || starts[0].Index != 1 || starts[1].Index != 2 {
+		t.Fatalf("unexpected batch result: downloads=%+v starts=%+v", result, starts)
+	}
+	if len(progress) < 4 || progress[0].Index != 1 || progress[len(progress)-1].Index != 2 {
+		t.Fatalf("unexpected batch progress: %+v", progress)
+	}
+	for index, download := range result.Downloads {
+		if filepath.Dir(download.Path) != outputDirectory {
+			t.Fatalf("output directory = %q, want %q", filepath.Dir(download.Path), outputDirectory)
+		}
+		written, err := os.ReadFile(download.Path)
+		if err != nil || !bytes.Equal(written, payloads[[]string{"/one", "/two"}[index]]) {
+			t.Fatalf("download %d = %q, %v", index, written, err)
+		}
 	}
 }
 

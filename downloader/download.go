@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -24,7 +25,7 @@ type downloadOptions struct {
 	Progress   func(DownloadProgress)
 }
 
-// Download selects the requested variant and saves one video file to disk.
+// Download selects the requested variant and saves one media file to disk.
 func Download(
 	ctx context.Context,
 	session *tiktok.Session,
@@ -52,6 +53,70 @@ func Download(
 		Referer:    file.Referer,
 		Progress:   options.Progress,
 	})
+}
+
+// DownloadAll selects one variant for every ordered item and saves the media
+// files in an output directory. It reuses the same validation, retry, atomic
+// write, and progress behavior as Download.
+func DownloadAll(
+	ctx context.Context,
+	session *tiktok.Session,
+	items []BatchItem,
+	file FileInfo,
+	options BatchOptions,
+) (*BatchResult, error) {
+	if len(items) == 0 {
+		return nil, errors.New("media collection has no downloadable items")
+	}
+	outputDirectory := strings.TrimSpace(options.OutputDir)
+	if outputDirectory == "" {
+		outputDirectory = defaultCollectionDirectory(file)
+	}
+	outputDirectory, err := resolveOutputPath(outputDirectory)
+	if err != nil {
+		return nil, err
+	}
+	if info, statErr := os.Stat(outputDirectory); statErr == nil {
+		if !info.IsDir() {
+			return nil, fmt.Errorf("output directory is not a directory: %s", outputDirectory)
+		}
+	} else if errors.Is(statErr, os.ErrNotExist) {
+		if err := os.MkdirAll(outputDirectory, 0o755); err != nil {
+			return nil, fmt.Errorf("create output directory: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("inspect output directory: %w", statErr)
+	}
+
+	result := &BatchResult{Downloads: make([]DownloadResult, 0, len(items))}
+	for index, item := range items {
+		selected, err := selectVariant(item.Variants, Options{Quality: "best", Watermarked: options.Watermarked})
+		if err != nil {
+			return nil, fmt.Errorf("select media %d/%d: %w", index+1, len(items), err)
+		}
+		outputPath := filepath.Join(outputDirectory, collectionFilename(file, index+1, len(items), selected))
+		if options.OnStart != nil {
+			options.OnStart(BatchStart{
+				Index:         index + 1,
+				Total:         len(items),
+				DownloadStart: DownloadStart{Media: selected, OutputPath: outputPath},
+			})
+		}
+		download, err := downloadVariant(ctx, session, *selected, downloadOptions{
+			OutputPath: outputPath,
+			Referer:    file.Referer,
+			Progress: func(progress DownloadProgress) {
+				if options.Progress != nil {
+					options.Progress(BatchProgress{Index: index + 1, Total: len(items), DownloadProgress: progress})
+				}
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("download media %d/%d: %w", index+1, len(items), err)
+		}
+		result.Downloads = append(result.Downloads, *download)
+	}
+	return result, nil
 }
 
 func downloadVariant(
@@ -94,7 +159,7 @@ func downloadVariant(
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		result, err := downloadURL(ctx, session, mediaURL, absolutePath, variant.Size, options)
+		result, err := downloadURL(ctx, session, mediaURL, absolutePath, variant, options)
 		if err == nil {
 			return result, nil
 		}
@@ -108,14 +173,14 @@ func downloadURL(
 	session *tiktok.Session,
 	mediaURL string,
 	outputPath string,
-	expectedSize int64,
+	variant media.Variant,
 	options downloadOptions,
 ) (*DownloadResult, error) {
 	parsed, err := url.Parse(mediaURL)
 	if err != nil || parsed.Scheme != "https" || !tiktok.IsAllowedHost(parsed.Hostname()) {
 		return nil, fmt.Errorf("refuse disallowed media URL: %s", redactURL(mediaURL))
 	}
-	response, err := session.Get(ctx, parsed.String(), "video/mp4,video/*;q=0.9,*/*;q=0.8", options.Referer)
+	response, err := session.Get(ctx, parsed.String(), "video/mp4,video/*;q=0.9,image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.7", options.Referer)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", parsed.Hostname(), err)
 	}
@@ -136,8 +201,8 @@ func downloadURL(
 		return nil, fmt.Errorf("inspect media response: %w", peekErr)
 	}
 	contentType := response.Header.Get("Content-Type")
-	if !looksLikeVideo(contentType, header) {
-		return nil, fmt.Errorf("download %s returned %q instead of video data", parsed.Hostname(), contentType)
+	if !looksLikeMedia(variant.Type, contentType, header) {
+		return nil, fmt.Errorf("download %s returned %q instead of %s data", parsed.Hostname(), contentType, expectedMediaType(variant.Type))
 	}
 
 	temporary, err := os.CreateTemp(filepath.Dir(outputPath), "."+filepath.Base(outputPath)+"-*.part")
@@ -155,7 +220,7 @@ func downloadURL(
 
 	totalBytes := response.ContentLength
 	if totalBytes <= 0 {
-		totalBytes = expectedSize
+		totalBytes = variant.Size
 	}
 	progress := progressWriter{writer: temporary, total: totalBytes, callback: options.Progress}
 	progress.report()
@@ -231,6 +296,48 @@ func defaultFilename(file FileInfo, variant *media.Variant) string {
 	return strings.Join([]string{username, videoID, watermark, quality, codec}, "_") + "." + format
 }
 
+func defaultCollectionDirectory(file FileInfo) string {
+	username := sanitizeFilenamePart(file.Author)
+	if username == "" {
+		username = "tiktok"
+	}
+	contentID := sanitizeFilenamePart(file.VideoID)
+	if contentID == "" {
+		contentID = "unknown"
+	}
+	return strings.Join([]string{username, contentID, "images"}, "_")
+}
+
+func collectionFilename(file FileInfo, index, total int, variant *media.Variant) string {
+	username := sanitizeFilenamePart(file.Author)
+	if username == "" {
+		username = "tiktok"
+	}
+	contentID := sanitizeFilenamePart(file.VideoID)
+	if contentID == "" {
+		contentID = "unknown"
+	}
+	watermark := "no_watermark"
+	if variant != nil && variant.Watermarked {
+		watermark = "watermark"
+	}
+	quality := "unknown"
+	format := "jpg"
+	if variant != nil {
+		if value := sanitizeFilenamePart(variant.Quality); value != "" {
+			quality = value
+		}
+		if value := sanitizeFilenamePart(variant.Format); value != "" {
+			format = value
+		}
+	}
+	width := len(strconv.Itoa(total))
+	if width < 3 {
+		width = 3
+	}
+	return fmt.Sprintf("%s_%s_%0*d_%s_%s.%s", username, contentID, width, index, watermark, quality, format)
+}
+
 func resolveOutputPath(outputPath string) (string, error) {
 	outputPath = strings.TrimSpace(outputPath)
 	if outputPath == "" {
@@ -256,9 +363,27 @@ func resolveOutputPath(outputPath string) (string, error) {
 	return absolutePath, nil
 }
 
-func looksLikeVideo(contentType string, header []byte) bool {
+func looksLikeMedia(variantType, contentType string, header []byte) bool {
 	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if strings.EqualFold(strings.TrimSpace(variantType), "image") {
+		return strings.HasPrefix(mediaType, "image/") || looksLikeImage(header)
+	}
 	return strings.HasPrefix(mediaType, "video/") || len(header) >= 8 && bytes.Equal(header[4:8], []byte("ftyp"))
+}
+
+func expectedMediaType(variantType string) string {
+	if strings.EqualFold(strings.TrimSpace(variantType), "image") {
+		return "image"
+	}
+	return "video"
+}
+
+func looksLikeImage(header []byte) bool {
+	return len(header) >= 3 && bytes.Equal(header[:3], []byte{0xff, 0xd8, 0xff}) ||
+		len(header) >= 8 && bytes.Equal(header[:8], []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'}) ||
+		len(header) >= 6 && (bytes.Equal(header[:6], []byte("GIF87a")) || bytes.Equal(header[:6], []byte("GIF89a"))) ||
+		len(header) >= 12 && bytes.Equal(header[:4], []byte("RIFF")) && bytes.Equal(header[8:12], []byte("WEBP")) ||
+		len(header) >= 12 && bytes.Equal(header[4:8], []byte("ftyp")) && (bytes.Equal(header[8:12], []byte("avif")) || bytes.Equal(header[8:12], []byte("avis")))
 }
 
 func redactURL(rawURL string) string {

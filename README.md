@@ -6,8 +6,8 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
 This repository contains a Go library plus a command-line tool:
 
-- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
-- **CLI**: `tiktok_crawler` detects the URL type, downloads public TikTok videos and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
+- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
+- **CLI**: `tiktok_crawler` detects the URL type, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
 
 The code uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
 
@@ -55,6 +55,7 @@ For more focused control, use the subpackages directly:
 ```go
 import (
 	"github.com/hatienl0i2612/tiktok-crawler/video"       // video.Result, video.Video, ...
+	"github.com/hatienl0i2612/tiktok-crawler/photo"       // photo.Result, photo.Image, ...
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"  // shortdrama.Result, ...
 	"github.com/hatienl0i2612/tiktok-crawler/cookies"     // cookies.LoadTikTokCookieHeader, ...
@@ -153,6 +154,24 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
+
+## Photo Posts
+
+Download every image in a Photo Post in its original post order:
+
+```bash
+go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
+```
+
+Replace `example` and `1234567890123456789` with the username and Photo Post ID from the URL you want to crawl. By default, the images are stored in a new `<username>_<photo-id>_images/` directory in the current working directory. Use `-output` to choose the output directory; it is created when necessary:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -output '~/Downloads/tiktok-photo-post' \
+  'https://www.tiktok.com/@example/photo/1234567890123456789'
+```
+
+Use `-json` to print the post metadata, signed image URLs, and signed audio playback URLs when TikTok exposes them, without downloading. `-quality` is ignored for Photo Posts because TikTok exposes one display image per post image. Some Photo Posts may expose official watermark image sources; `-watermark` requires those sources and returns an error instead of silently downloading the no-watermark image when they are absent.
 
 ## Short Drama episodes
 

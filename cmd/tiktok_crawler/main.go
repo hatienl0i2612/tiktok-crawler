@@ -20,6 +20,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/downloader"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
@@ -30,6 +31,7 @@ const videoRequestTimeout = 5 * time.Minute
 var (
 	livePathPattern       = regexp.MustCompile(`^/@[^/]+/live/?$`)
 	videoPathPattern      = regexp.MustCompile(`^/@[^/]+/video/[0-9]+/?$`)
+	photoPathPattern      = regexp.MustCompile(`^/@[^/]+/photo/[0-9]+/?$`)
 	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
 )
 
@@ -38,6 +40,7 @@ type contentType string
 const (
 	contentTypeLive       contentType = "live"
 	contentTypeVideo      contentType = "video"
+	contentTypePhoto      contentType = "photo"
 	contentTypeShortDrama contentType = "short_drama"
 )
 
@@ -78,6 +81,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch options.content {
 	case contentTypeVideo:
 		return runVideo(options, cookie, stdout, stderr)
+	case contentTypePhoto:
+		return runPhoto(options, cookie, stdout, stderr)
 	case contentTypeShortDrama:
 		return runShortDrama(options, cookie, stdout, stderr)
 	case contentTypeLive:
@@ -141,16 +146,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("tiktok_crawler", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.BoolVar(&options.json, "json", false, "print resolved metadata as JSON")
-	flags.StringVar(&options.output, "output", "", "video download destination (ignored for LIVE URLs)")
-	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for LIVE URLs)")
-	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked video variant (ignored for LIVE URLs)")
+	flags.StringVar(&options.output, "output", "", "download file destination; for Photo Posts, an output directory (ignored for LIVE URLs)")
+	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for Photo Posts and LIVE URLs)")
+	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked video or image variant (ignored for LIVE URLs)")
 	flags.BoolVar(&options.verbose, "verbose", false, "print a LIVE room summary to stderr (ignored for video URLs)")
 	flags.StringVar(&options.cookiesFile, "cookies-file", "", "path to a TikTok cookies .txt file (Netscape cookie-jar export or raw Cookie header value)")
 	flags.StringVar(&options.cookiesBrowser, "cookies-from-browser", "", "read a TikTok Cookie header from an installed browser (brave, chrome, edge, firefox, safari, ...)")
 	flags.Var(&headerValues, "headers", "additional HTTP header to send on every request, as 'Key: Value'; User-Agent can be set here; may be repeated")
 	flags.DurationVar(&options.timeout, "timeout", 20*time.Second, "LIVE request timeout (ignored for video URLs)")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
+		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Photo Post, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
 		flags.PrintDefaults()
 	}
 
@@ -159,7 +164,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
-		return options, errors.New("exactly one TikTok video, Short Drama episode, or LIVE URL is required")
+		return options, errors.New("exactly one TikTok video, Photo Post, Short Drama episode, or LIVE URL is required")
 	}
 	options.inputURL = flags.Arg(0)
 
@@ -176,7 +181,8 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		options.headers = headers
 	}
 
-	if isDownloadableContent(options.content) {
+	switch options.content {
+	case contentTypeVideo, contentTypeShortDrama:
 		options.quality = strings.ToLower(strings.TrimSpace(options.quality))
 		options.output = strings.TrimSpace(options.output)
 		if options.json && (options.output != "" || options.watermark || options.quality != "best") {
@@ -188,8 +194,16 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 				return options, errors.New("quality must be best or a positive height such as 720 or 1080p")
 			}
 		}
-	} else if options.timeout <= 0 {
-		return options, errors.New("timeout must be greater than zero")
+	case contentTypePhoto:
+		options.quality = "best"
+		options.output = strings.TrimSpace(options.output)
+		if options.json && (options.output != "" || options.watermark) {
+			return options, errors.New("-json cannot be combined with -output or -watermark for Photo Posts")
+		}
+	default:
+		if options.timeout <= 0 {
+			return options, errors.New("timeout must be greater than zero")
+		}
 	}
 	return options, nil
 }
@@ -204,15 +218,13 @@ func detectContentType(rawURL string) (contentType, error) {
 		return contentTypeLive, nil
 	case videoPathPattern.MatchString(parsed.EscapedPath()):
 		return contentTypeVideo, nil
+	case photoPathPattern.MatchString(parsed.EscapedPath()):
+		return contentTypePhoto, nil
 	case shortDramaPathPattern.MatchString(parsed.EscapedPath()):
 		return contentTypeShortDrama, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video, Short Drama episode, or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
-}
-
-func isDownloadableContent(content contentType) bool {
-	return content == contentTypeVideo || content == contentTypeShortDrama
 }
 
 func runVideo(options options, cookie string, stdout, stderr io.Writer) error {
@@ -259,6 +271,28 @@ func runShortDrama(options options, cookie string, stdout, stderr io.Writer) err
 	}, result.Media, options, stdout, stderr)
 }
 
+func runPhoto(options options, cookie string, stdout, stderr io.Writer) error {
+	client, err := photo.NewClient(photo.ClientOptions{Cookie: cookie, Headers: options.headers})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), videoRequestTimeout)
+	defer cancel()
+
+	result, err := client.Resolve(ctx, options.inputURL)
+	if err != nil {
+		return err
+	}
+	if options.json {
+		return printJSON(stdout, result)
+	}
+	return downloadPhoto(ctx, client.Session(), downloader.FileInfo{
+		Author:  result.Post.Author.UniqueID,
+		VideoID: result.Post.ID,
+		Referer: result.FinalURL,
+	}, result.Images, options, stdout, stderr)
+}
+
 func downloadVideo(
 	ctx context.Context,
 	session *tiktok.Session,
@@ -285,6 +319,43 @@ func downloadVideo(
 	progress.complete(download)
 	_, err = fmt.Fprintln(stdout, download.Path)
 	return err
+}
+
+func downloadPhoto(
+	ctx context.Context,
+	session *tiktok.Session,
+	file downloader.FileInfo,
+	images []photo.Image,
+	options options,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	items := make([]downloader.BatchItem, 0, len(images))
+	for _, image := range images {
+		items = append(items, downloader.BatchItem{Variants: image.Media})
+	}
+	progress := newProgressDisplay(stderr)
+	downloads, err := downloader.DownloadAll(ctx, session, items, file, downloader.BatchOptions{
+		OutputDir:   options.output,
+		Watermarked: options.watermark,
+		Progress: func(update downloader.BatchProgress) {
+			progress.update(update.DownloadProgress)
+		},
+		OnStart: func(start downloader.BatchStart) {
+			progress.startImage(start.Index, start.Total, file.Author, file.VideoID, start.Media, start.OutputPath)
+		},
+	})
+	if err != nil {
+		progress.stop()
+		return err
+	}
+	progress.completeBatch(downloads.Downloads)
+	for _, download := range downloads.Downloads {
+		if _, err := fmt.Fprintln(stdout, download.Path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runLive(options options, cookie string, stdout, stderr io.Writer) error {
@@ -347,6 +418,15 @@ type progressDisplay struct {
 func newProgressDisplay(writer io.Writer) *progressDisplay { return &progressDisplay{writer: writer} }
 
 func (display *progressDisplay) start(username, videoID string, variant *media.Variant, outputPath string) {
+	display.startAsset("Downloading TikTok video", "Video", "Media", username, videoID, variant, outputPath)
+}
+
+func (display *progressDisplay) startImage(index, total int, username, photoID string, variant *media.Variant, outputPath string) {
+	display.startAsset(fmt.Sprintf("Downloading TikTok image %d/%d", index, total), "Photo", "Image", username, photoID, variant, outputPath)
+}
+
+func (display *progressDisplay) startAsset(title, idLabel, mediaLabel, username, contentID string, variant *media.Variant, outputPath string) {
+	display.stop()
 	if username == "" {
 		username = "unknown"
 	}
@@ -354,15 +434,19 @@ func (display *progressDisplay) start(username, videoID string, variant *media.V
 	if variant.Watermarked {
 		watermark = "TikTok watermark"
 	}
-	details := []string{watermark, displayCodec(variant.Codec), variant.Quality}
+	codec := displayCodec(variant.Codec)
+	if strings.EqualFold(variant.Type, "image") && variant.Format != "" {
+		codec = strings.ToUpper(variant.Format)
+	}
+	details := []string{watermark, codec, variant.Quality}
 	if variant.Width > 0 && variant.Height > 0 {
 		details = append(details, fmt.Sprintf("%dx%d", variant.Width, variant.Height))
 	}
 	if variant.Size > 0 {
 		details = append(details, formatBytes(variant.Size))
 	}
-	fmt.Fprintln(display.writer, "Downloading TikTok video")
-	fmt.Fprintf(display.writer, "  Author:  @%s\n  Video:   %s\n  Media:   %s\n  Output:  %s\n", username, videoID, strings.Join(details, " | "), outputPath)
+	fmt.Fprintln(display.writer, title)
+	fmt.Fprintf(display.writer, "  Author:  @%s\n  %s:   %s\n  %s:   %s\n  Output:  %s\n", username, idLabel, contentID, mediaLabel, strings.Join(details, " | "), outputPath)
 }
 
 func (display *progressDisplay) update(progress downloader.DownloadProgress) {
@@ -423,6 +507,15 @@ func (display *progressDisplay) complete(result *downloader.DownloadResult) {
 		bytesPerSecond = float64(result.Bytes) / elapsed.Seconds()
 	}
 	fmt.Fprintf(display.writer, "Completed: %s in %s (%s/s)\n", formatBytes(result.Bytes), formatElapsed(elapsed), formatBytes(int64(bytesPerSecond)))
+}
+
+func (display *progressDisplay) completeBatch(downloads []downloader.DownloadResult) {
+	display.stop()
+	var totalBytes int64
+	for _, download := range downloads {
+		totalBytes += download.Bytes
+	}
+	fmt.Fprintf(display.writer, "Completed: %d images (%s)\n", len(downloads), formatBytes(totalBytes))
 }
 
 func (display *progressDisplay) stop() {

@@ -1,4 +1,4 @@
-// Package downloader selects and downloads TikTok video media.
+// Package downloader selects and downloads TikTok media files.
 package downloader
 
 import "github.com/hatienl0i2612/tiktok-crawler/media"
@@ -17,14 +17,14 @@ type DownloadResult struct {
 	SourceURL   string `json:"source_url"`
 }
 
-// FileInfo contains metadata used for the output filename and Referer header.
+// FileInfo contains metadata used for output names and the Referer header.
 type FileInfo struct {
 	Author  string
 	VideoID string
 	Referer string
 }
 
-// Options controls selecting and downloading one resolved video.
+// Options controls selecting and downloading one resolved media file.
 type Options struct {
 	OutputPath  string
 	Quality     string
@@ -37,4 +37,38 @@ type Options struct {
 type DownloadStart struct {
 	Media      *media.Variant
 	OutputPath string
+}
+
+// BatchItem contains every source variant for one file in an ordered media
+// collection, such as one image in a TikTok Photo Post.
+type BatchItem struct {
+	Variants []media.Variant
+}
+
+// BatchOptions controls downloading an ordered media collection. OutputDir is
+// a directory, unlike Options.OutputPath which is a single file path.
+type BatchOptions struct {
+	OutputDir   string
+	Watermarked bool
+	Progress    func(BatchProgress)
+	OnStart     func(BatchStart)
+}
+
+// BatchProgress reports the progress of one file in a media collection.
+type BatchProgress struct {
+	Index int
+	Total int
+	DownloadProgress
+}
+
+// BatchStart describes the next file selected from a media collection.
+type BatchStart struct {
+	Index int
+	Total int
+	DownloadStart
+}
+
+// BatchResult contains the completed files in their source order.
+type BatchResult struct {
+	Downloads []DownloadResult `json:"downloads"`
 }

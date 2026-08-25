@@ -17,6 +17,7 @@ func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }
 
 func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 	const videoURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
+	const photoURL = "https://www.tiktok.com/@5gvietteldv/photo/7666697358540852500"
 	const liveURL = "https://www.tiktok.com/@weathernewslive/live"
 	const shortDramaURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
 	tests := []struct {
@@ -55,6 +56,11 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 			want: options{inputURL: shortDramaURL, content: contentTypeShortDrama, output: "episode.mp4", quality: "720p", timeout: 20 * time.Second},
 		},
 		{
+			name: "Photo Post uses an output directory and ignores quality",
+			args: []string{photoURL, "-quality", "720p", "-output", "images", "-watermark"},
+			want: options{inputURL: photoURL, content: contentTypePhoto, output: "images", quality: "best", watermark: true, timeout: 20 * time.Second},
+		},
+		{
 			name: "repeated headers flag",
 			args: []string{liveURL, "-headers", "X-Custom: abc", "-headers", "user-agent: custom-ua"},
 			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", headers: map[string]string{"X-Custom": "abc", "User-Agent": "custom-ua"}, timeout: 20 * time.Second},
@@ -91,6 +97,7 @@ func TestDetectContentType(t *testing.T) {
 	}{
 		{"https://www.tiktok.com/@example/live", contentTypeLive, false},
 		{"https://www.tiktok.com/@example/video/1234567890123456789?lang=en", contentTypeVideo, false},
+		{"https://www.tiktok.com/@example/photo/1234567890123456789", contentTypePhoto, false},
 		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", contentTypeShortDrama, false},
 		{"https://example.com/@example/live", "", true},
 		{"https://www.tiktok.com/@example", "", true},

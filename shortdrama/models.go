@@ -182,7 +182,7 @@ func makeShortDramaMedia(source shortDramaVideo) []media.Variant {
 		if len(urls) == 0 {
 			continue
 		}
-		variants = append(variants, media.Variant{Kind: "short_drama_playback", Codec: tiktok.NormalizeCodec(firstNonEmpty(profile.CodecType, profile.CodecTypeAlt, "h264")), Format: "mp4", Quality: media.QualityName(address.Height), GearName: firstNonEmpty(profile.GearName, profile.GearNameAlt), Width: address.Width, Height: address.Height, Bitrate: firstNonZero(profile.Bitrate, profile.BitrateAlt), Size: firstNonZero(address.DataSize, address.DataSizeAlt), URI: firstNonEmpty(address.URI, address.URIAlt), URL: urls[0], BackupURLs: media.UniqueStrings(urls[1:]), ExpiresAt: tiktok.ExpiryFromURL(urls[0])})
+		variants = append(variants, media.Variant{Type: "video", Kind: "short_drama_playback", Codec: tiktok.NormalizeCodec(firstNonEmpty(profile.CodecType, profile.CodecTypeAlt, "h264")), Format: "mp4", Quality: media.QualityName(address.Height), GearName: firstNonEmpty(profile.GearName, profile.GearNameAlt), Width: address.Width, Height: address.Height, Bitrate: firstNonZero(profile.Bitrate, profile.BitrateAlt), Size: firstNonZero(address.DataSize, address.DataSizeAlt), URI: firstNonEmpty(address.URI, address.URIAlt), URL: urls[0], BackupURLs: media.UniqueStrings(urls[1:]), ExpiresAt: tiktok.ExpiryFromURL(urls[0])})
 	}
 	if len(variants) > 0 {
 		return variants
@@ -191,7 +191,7 @@ func makeShortDramaMedia(source shortDramaVideo) []media.Variant {
 	if len(urls) == 0 {
 		return nil
 	}
-	return []media.Variant{{Kind: "short_drama_playback", Codec: "h264", Format: "mp4", Quality: media.QualityName(source.Height), Width: source.Width, Height: source.Height, Bitrate: source.Bitrate, URL: urls[0], BackupURLs: media.UniqueStrings(urls[1:]), ExpiresAt: tiktok.ExpiryFromURL(urls[0])}}
+	return []media.Variant{{Type: "video", Kind: "short_drama_playback", Codec: "h264", Format: "mp4", Quality: media.QualityName(source.Height), Width: source.Width, Height: source.Height, Bitrate: source.Bitrate, URL: urls[0], BackupURLs: media.UniqueStrings(urls[1:]), ExpiresAt: tiktok.ExpiryFromURL(urls[0])}}
 }
 
 func mergeShortDramaItems(base, detail shortDramaItem) shortDramaItem {

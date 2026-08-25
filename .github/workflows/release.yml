@@ -38,7 +38,7 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 ./... -v
 
   build:
     name: Build ${{ matrix.name }}

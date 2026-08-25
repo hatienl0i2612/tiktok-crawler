@@ -15,6 +15,8 @@ import (
 const DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
 
+const playerItemsEndpoint = "https://www.tiktok.com/player/api/v1/items"
+
 // SessionOptions configures a shared cookie-aware TikTok HTTP session.
 type SessionOptions struct {
 	Cookie    string
@@ -111,6 +113,37 @@ func (session *Session) Fetch(
 		return nil, finalURL, err
 	}
 	return body, finalURL, nil
+}
+
+// FetchPlayerItem retrieves the JSON item payload used by TikTok's web player.
+// Video posts and Photo Posts use the same endpoint and request parameters.
+func FetchPlayerItem(
+	ctx context.Context,
+	session *Session,
+	itemID string,
+	referer string,
+	limit int64,
+) ([]byte, error) {
+	if session == nil {
+		return nil, errors.New("TikTok session is not configured")
+	}
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return nil, errors.New("TikTok player item ID must not be empty")
+	}
+	endpoint, _ := url.Parse(playerItemsEndpoint)
+	query := endpoint.Query()
+	query.Set("item_ids", itemID)
+	query.Set("language", "en")
+	query.Set("aid", "1459")
+	query.Set("data_source", "web_core")
+	endpoint.RawQuery = query.Encode()
+
+	body, _, err := session.Fetch(ctx, endpoint.String(), "application/json, text/plain, */*", referer, limit)
+	if err != nil {
+		return nil, fmt.Errorf("fetch player metadata: %w", err)
+	}
+	return body, nil
 }
 
 // Get executes a GET request with the session's standard TikTok headers.

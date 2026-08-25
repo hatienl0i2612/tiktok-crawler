@@ -1,6 +1,6 @@
 // Package tiktokcrawler is the high-level entry point for the TikTok Crawler
 // library. It detects the kind of a TikTok URL and resolves it through the
-// specialized video, livestream, or shortdrama clients.
+// specialized video, photo, livestream, or shortdrama clients.
 //
 // # Quick start
 //
@@ -17,7 +17,7 @@
 //		log.Fatal(err)
 //	}
 //
-// For more focused control, import the subpackages directly (video,
+// For more focused control, import the subpackages directly (video, photo,
 // livestream, shortdrama, cookies, downloader).
 package tiktokcrawler
 
@@ -28,6 +28,7 @@ import (
 	"regexp"
 
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
@@ -36,6 +37,7 @@ import (
 var (
 	livePathPattern       = regexp.MustCompile(`^/@[^/]+/live/?$`)
 	videoPathPattern      = regexp.MustCompile(`^/@[^/]+/video/[0-9]+/?$`)
+	photoPathPattern      = regexp.MustCompile(`^/@[^/]+/photo/[0-9]+/?$`)
 	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
 )
 
@@ -45,6 +47,8 @@ type Kind string
 const (
 	// KindVideo is a regular TikTok video post.
 	KindVideo Kind = "video"
+	// KindPhoto is a TikTok Photo Post.
+	KindPhoto Kind = "photo"
 	// KindLive is a TikTok LIVE room.
 	KindLive Kind = "livestream"
 	// KindShortDrama is a TikTok Short Drama episode.
@@ -63,10 +67,12 @@ func DetectKind(rawURL string) (Kind, error) {
 		return KindLive, nil
 	case videoPathPattern.MatchString(parsed.EscapedPath()):
 		return KindVideo, nil
+	case photoPathPattern.MatchString(parsed.EscapedPath()):
+		return KindPhoto, nil
 	case shortDramaPathPattern.MatchString(parsed.EscapedPath()):
 		return KindShortDrama, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video, Short Drama episode, or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
 }
 
@@ -79,6 +85,7 @@ type ClientOptions struct {
 // Client is a high-level client that detects the URL kind and resolves it.
 type Client struct {
 	video      *video.Client
+	photo      *photo.Client
 	livestream *livestream.Client
 	shortdrama *shortdrama.Client
 }
@@ -90,6 +97,10 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	photoClient, err := photo.NewClient(photo.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
+	if err != nil {
+		return nil, err
+	}
 	liveClient, err := livestream.NewClient(livestream.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
 	if err != nil {
 		return nil, err
@@ -98,11 +109,14 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{video: videoClient, livestream: liveClient, shortdrama: dramaClient}, nil
+	return &Client{video: videoClient, photo: photoClient, livestream: liveClient, shortdrama: dramaClient}, nil
 }
 
 // Video returns the underlying video client for focused resolution or download.
 func (client *Client) Video() *video.Client { return client.video }
+
+// Photo returns the underlying Photo Post client for focused resolution or download.
+func (client *Client) Photo() *photo.Client { return client.photo }
 
 // Livestream returns the underlying livestream client for focused resolution.
 func (client *Client) Livestream() *livestream.Client { return client.livestream }
@@ -114,6 +128,7 @@ func (client *Client) ShortDrama() *shortdrama.Client { return client.shortdrama
 type Result struct {
 	Kind       Kind
 	Video      *video.Result
+	Photo      *photo.Result
 	Livestream *livestream.Result
 	ShortDrama *shortdrama.Result
 }
@@ -131,6 +146,12 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 			return nil, err
 		}
 		return &Result{Kind: KindVideo, Video: result}, nil
+	case KindPhoto:
+		result, err := client.photo.Resolve(ctx, rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return &Result{Kind: KindPhoto, Photo: result}, nil
 	case KindLive:
 		result, err := client.livestream.Resolve(ctx, rawURL)
 		if err != nil {

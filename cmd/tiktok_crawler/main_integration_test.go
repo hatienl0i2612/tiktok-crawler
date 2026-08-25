@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
@@ -100,5 +101,42 @@ func TestRunShortDramaJSONIntegration(t *testing.T) {
 	}
 	if result.Video.ID == "" || len(result.Media) == 0 {
 		t.Fatalf("expected episode video and media: %#v", result)
+	}
+}
+
+func TestRunPhotoPostJSONIntegration(t *testing.T) {
+	if os.Getenv("TIKTOK_PHOTO_INTEGRATION") != "1" {
+		t.Skip("set TIKTOK_PHOTO_INTEGRATION=1 to run against TikTok")
+	}
+
+	const inputURL = "https://www.tiktok.com/@5gvietteldv/photo/7666697358540852500"
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run -json %s: %v", inputURL, err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	var result photo.Result
+	decoder := json.NewDecoder(&stdout)
+	if err := decoder.Decode(&result); err != nil {
+		t.Fatalf("decode JSON output: %v\noutput: %s", err, stdout.String())
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		t.Fatalf("expected exactly one JSON document, got: %v", err)
+	}
+	if result.InputURL != inputURL || result.Post.ID != "7666697358540852500" || !strings.EqualFold(result.Post.Author.UniqueID, "5gvietteldv") {
+		t.Fatalf("unexpected Photo Post result: %+v", result.Post)
+	}
+	if len(result.Images) == 0 || len(result.Images[0].Media) == 0 {
+		t.Fatalf("expected downloadable Photo Post images: %+v", result.Images)
+	}
+	for _, image := range result.Images {
+		for _, media := range image.Media {
+			parsed, err := url.Parse(media.URL)
+			if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
+				t.Fatalf("invalid image URL %q: %v", media.URL, err)
+			}
+		}
 	}
 }

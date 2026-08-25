@@ -1,4 +1,4 @@
-// Package media defines normalized TikTok video media variants.
+// Package media defines normalized TikTok downloadable media variants.
 package media
 
 import (
@@ -8,8 +8,9 @@ import (
 	"time"
 )
 
-// Variant is one downloadable encoding of a TikTok video.
+// Variant is one downloadable TikTok video or image representation.
 type Variant struct {
+	Type        string     `json:"type"`
 	Kind        string     `json:"kind"`
 	Watermarked bool       `json:"watermarked"`
 	Codec       string     `json:"codec"`

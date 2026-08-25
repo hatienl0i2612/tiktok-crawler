@@ -112,22 +112,9 @@ func (client *Client) fetchPlayer(
 	videoID string,
 	referer string,
 ) (playerResponse, []byte, error) {
-	endpoint, _ := url.Parse("https://www.tiktok.com/player/api/v1/items")
-	query := endpoint.Query()
-	query.Set("item_ids", videoID)
-	query.Set("language", "en")
-	query.Set("aid", "1459")
-	query.Set("data_source", "web_core")
-	endpoint.RawQuery = query.Encode()
-
-	body, _, err := client.fetchMetadata(
-		ctx,
-		endpoint.String(),
-		"application/json, text/plain, */*",
-		referer,
-	)
+	body, err := tiktok.FetchPlayerItem(ctx, client.session, videoID, referer, maxMetadataResponseSize)
 	if err != nil {
-		return playerResponse{}, nil, fmt.Errorf("fetch player metadata: %w", err)
+		return playerResponse{}, nil, err
 	}
 	var response playerResponse
 	decoder := json.NewDecoder(bytes.NewReader(body))
@@ -164,8 +151,46 @@ func (client *Client) fetchEmbed(
 	videoID string,
 	referer string,
 ) (embedVideoData, error) {
+	return fetchEmbedMetadata(ctx, client.session, videoID, referer)
+}
+
+// FetchEmbedMusic resolves the audio metadata exposed by TikTok's embed page.
+// It is useful for content types such as Photo Posts whose Player API response
+// includes music labels but omits the signed audio URL.
+func FetchEmbedMusic(
+	ctx context.Context,
+	session *tiktok.Session,
+	itemID string,
+	referer string,
+) (Music, error) {
+	embed, err := fetchEmbedMetadata(ctx, session, itemID, referer)
+	if err != nil {
+		return Music{}, err
+	}
+	music := embed.MusicInfos
+	return Music{
+		ID:           music.MusicID,
+		Title:        music.MusicName,
+		Author:       music.AuthorName,
+		PlaybackURLs: uniqueStrings(music.PlayURL),
+		CoverURLs: uniqueStrings(append(
+			append(append([]string{}, music.Covers...), music.CoversMedium...),
+			music.CoversLarger...,
+		)),
+	}, nil
+}
+
+func fetchEmbedMetadata(
+	ctx context.Context,
+	session *tiktok.Session,
+	videoID string,
+	referer string,
+) (embedVideoData, error) {
+	if session == nil {
+		return embedVideoData{}, errors.New("TikTok session is not configured")
+	}
 	target := "https://www.tiktok.com/embed/v2/" + url.PathEscape(videoID)
-	body, _, err := client.fetchMetadata(ctx, target, "text/html,application/xhtml+xml", referer)
+	body, _, err := session.Fetch(ctx, target, "text/html,application/xhtml+xml", referer, maxMetadataResponseSize)
 	if err != nil {
 		return embedVideoData{}, fmt.Errorf("fetch embed page: %w", err)
 	}
@@ -260,6 +285,7 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 			format = "mp4"
 		}
 		media = append(media, Media{
+			Type:        "video",
 			Kind:        "playback",
 			Watermarked: false,
 			Codec:       normalizeCodec(profile.CodecType),
@@ -285,6 +311,7 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 		format = "mp4"
 	}
 	return []Media{{
+		Type:        "video",
 		Kind:        "playback",
 		Watermarked: false,
 		Codec:       "h264",
@@ -421,6 +448,7 @@ func appendWatermarkedMedia(result *Result, urls []string) {
 		return
 	}
 	result.Media = append(result.Media, Media{
+		Type:        "video",
 		Kind:        "download",
 		Watermarked: true,
 		Codec:       "unknown",
