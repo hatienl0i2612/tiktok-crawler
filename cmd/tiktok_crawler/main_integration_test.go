@@ -11,6 +11,7 @@ import (
 
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/photo"
+	"github.com/hatienl0i2612/tiktok-crawler/profile"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
@@ -137,6 +138,34 @@ func TestRunPhotoPostJSONIntegration(t *testing.T) {
 			if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
 				t.Fatalf("invalid image URL %q: %v", media.URL, err)
 			}
+		}
+	}
+}
+
+func TestRunProfileJSONIntegration(t *testing.T) {
+	if os.Getenv("TIKTOK_PROFILE_INTEGRATION") != "1" {
+		t.Skip("set TIKTOK_PROFILE_INTEGRATION=1 to run against TikTok")
+	}
+
+	const inputURL = "https://www.tiktok.com/@forever0404_"
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run -json %s: %v", inputURL, err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	var result profile.Result
+	if err := json.NewDecoder(&stdout).Decode(&result); err != nil {
+		t.Fatalf("decode JSON output: %v\noutput: %s", err, stdout.String())
+	}
+	if result.User.UniqueID != "forever0404_" || result.User.Statistics.VideoCount == 0 || len(result.VideoURLs) == 0 || len(result.Videos) != len(result.VideoURLs) {
+		t.Fatalf("unexpected profile result: %+v", result)
+	}
+	for _, videoURL := range result.VideoURLs {
+		parsed, err := url.Parse(videoURL)
+		if err != nil || parsed.Scheme != "https" || !strings.Contains(parsed.Path, "/@forever0404_/video/") {
+			t.Fatalf("invalid profile video URL %q: %v", videoURL, err)
 		}
 	}
 }

@@ -159,6 +159,46 @@ func TestDownloadAllDownloadsImageCollection(t *testing.T) {
 	}
 }
 
+func TestDownloadAllUsesPerVideoMetadataAndQuality(t *testing.T) {
+	t.Parallel()
+	payload := []byte{0, 0, 0, 20, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'}
+	session, err := tiktok.NewSession(tiktok.SessionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Header.Get("Referer") != "https://www.tiktok.com/@creator/video/222" {
+			t.Fatalf("Referer = %q", request.Header.Get("Referer"))
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK, Status: "200 OK",
+			Header: http.Header{"Content-Type": []string{"video/mp4"}},
+			Body:   io.NopCloser(bytes.NewReader(payload)), ContentLength: int64(len(payload)), Request: request,
+		}, nil
+	})
+
+	directory := t.TempDir()
+	var start BatchStart
+	result, err := DownloadAll(context.Background(), session, []BatchItem{{
+		File: FileInfo{VideoID: "222", Referer: "https://www.tiktok.com/@creator/video/222"},
+		Variants: []media.Variant{
+			{Type: "video", Codec: "h264", Format: "mp4", Quality: "720p", Height: 720, URL: "https://v16.tiktokcdn.com/720"},
+			{Type: "video", Codec: "h265", Format: "mp4", Quality: "1080p", Height: 1080, URL: "https://v16.tiktokcdn.com/1080"},
+		},
+	}}, FileInfo{Author: "creator"}, BatchOptions{
+		OutputDir: directory, Quality: "720p", OnStart: func(value BatchStart) { start = value },
+	})
+	if err != nil {
+		t.Fatalf("DownloadAll: %v", err)
+	}
+	if len(result.Downloads) != 1 || filepath.Base(result.Downloads[0].Path) != "creator_222_no_watermark_720p_h264.mp4" {
+		t.Fatalf("unexpected downloads: %+v", result)
+	}
+	if start.File.Author != "creator" || start.File.VideoID != "222" || start.Media.Quality != "720p" {
+		t.Fatalf("unexpected start: %+v", start)
+	}
+}
+
 func TestDownloadValidation(t *testing.T) {
 	t.Parallel()
 	session, err := tiktok.NewSession(tiktok.SessionOptions{})

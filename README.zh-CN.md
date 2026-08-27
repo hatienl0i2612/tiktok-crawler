@@ -6,8 +6,8 @@
 
 本仓库包含一个 Go 库和一个命令行工具：
 
-- **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、图文帖、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
-- **CLI**：`tiktok_crawler` 自动识别 URL 类型，下载公开 TikTok 视频、图文帖和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
+- **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、创作者主页、图文帖、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
+- **CLI**：`tiktok_crawler` 自动识别 URL 类型，抓取公开创作者主页，下载公开 TikTok 视频、图文帖和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
 
 该工具使用 Go 标准库，并通过 `browsercookie` 包可选地从已安装的浏览器中导入 cookie。
 
@@ -25,7 +25,7 @@ client, err := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-也可直接使用子包：`video`、`photo`、`livestream`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
+也可直接使用子包：`video`、`profile`、`photo`、`livestream`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
 
 ## 下载发行版
 
@@ -118,6 +118,27 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 下载内容会先写入临时文件，仅在完成后移动到目标路径。已有文件永远不会被覆盖；必要时请选择其他 `-output` 路径。带签名媒体 URL 会过期，因此旧 URL 失效后请重新抓取视频。
+
+## 创作者主页
+
+输出公开用户元数据，以及 TikTok 创作者嵌入页公开的最近 10 个公开视频的规范链接：
+
+```bash
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@forever0404_'
+```
+
+JSON 包含 `user`、`listing`、`video_urls` 和 `videos`。主要分页接口 `/api/post/item_list/` 受浏览器生成的 `X-Dynosaur`/`X-Gnarly` 签名保护，即使签名正确也可能返回交互式验证码。因此，抓取器使用公开的服务端渲染 `/embed/@username` 创作者卡片；它能稳定返回最近 10 个公开视频，但不提供用户的完整历史归档。
+
+不使用 `-json` 时，抓取器会把每个规范 URL 交给现有视频解析器并下载所有返回的视频。`-quality`、`-watermark` 和 `-output` 会应用于整个集合：
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -quality 1080p \
+  -output "$HOME/Downloads/forever0404-videos" \
+  'https://www.tiktok.com/@forever0404_'
+```
+
+未指定 `-output` 时，文件保存在新的 `<username>_videos/` 目录中，每个文件名都会保留对应的 TikTok 视频 ID。
 
 ## 图文帖
 

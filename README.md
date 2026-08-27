@@ -6,8 +6,8 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
 This repository contains a Go library plus a command-line tool:
 
-- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
-- **CLI**: `tiktok_crawler` detects the URL type, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
+- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, creator profiles, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
+- **CLI**: `tiktok_crawler` detects the URL type, crawls public creator profiles, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
 
 The code uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
 
@@ -55,6 +55,7 @@ For more focused control, use the subpackages directly:
 ```go
 import (
 	"github.com/hatienl0i2612/tiktok-crawler/video"       // video.Result, video.Video, ...
+	"github.com/hatienl0i2612/tiktok-crawler/profile"     // profile.Result, profile.User, ...
 	"github.com/hatienl0i2612/tiktok-crawler/photo"       // photo.Result, photo.Image, ...
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"  // shortdrama.Result, ...
@@ -156,6 +157,27 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
+
+## Creator profiles
+
+Print public user metadata and canonical links for the 10 most recent public videos exposed by TikTok's creator embed:
+
+```bash
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@forever0404_'
+```
+
+The JSON result includes `user`, `listing`, `video_urls`, and detailed `videos`. TikTok's main `/api/post/item_list/` pagination is protected by browser-generated `X-Dynosaur` and `X-Gnarly` signatures and can return an interactive captcha even when correctly signed. The crawler therefore uses the public server-rendered `/embed/@username` creator card, which reliably exposes the latest 10 public videos but not the creator's complete archive.
+
+Without `-json`, the crawler feeds each canonical URL back through the normal video resolver and downloads all returned videos. `-quality`, `-watermark`, and `-output` apply to the whole collection:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -quality 1080p \
+  -output "$HOME/Downloads/forever0404-videos" \
+  'https://www.tiktok.com/@forever0404_'
+```
+
+When `-output` is omitted, files are written to a new `<username>_videos/` directory. Each filename retains its TikTok video ID.
 
 ## Photo Posts
 

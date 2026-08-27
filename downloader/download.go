@@ -90,21 +90,27 @@ func DownloadAll(
 
 	result := &BatchResult{Downloads: make([]DownloadResult, 0, len(items))}
 	for index, item := range items {
-		selected, err := selectVariant(item.Variants, Options{Quality: "best", Watermarked: options.Watermarked})
+		selected, err := selectVariant(item.Variants, Options{Quality: options.Quality, Watermarked: options.Watermarked})
 		if err != nil {
 			return nil, fmt.Errorf("select media %d/%d: %w", index+1, len(items), err)
 		}
-		outputPath := filepath.Join(outputDirectory, collectionFilename(file, index+1, len(items), selected))
+		itemFile := mergeFileInfo(file, item.File)
+		filename := collectionFilename(itemFile, index+1, len(items), selected)
+		if item.File.VideoID != "" {
+			filename = defaultFilename(itemFile, selected)
+		}
+		outputPath := filepath.Join(outputDirectory, filename)
 		if options.OnStart != nil {
 			options.OnStart(BatchStart{
 				Index:         index + 1,
 				Total:         len(items),
+				File:          itemFile,
 				DownloadStart: DownloadStart{Media: selected, OutputPath: outputPath},
 			})
 		}
 		download, err := downloadVariant(ctx, session, *selected, downloadOptions{
 			OutputPath: outputPath,
-			Referer:    file.Referer,
+			Referer:    itemFile.Referer,
 			Progress: func(progress DownloadProgress) {
 				if options.Progress != nil {
 					options.Progress(BatchProgress{Index: index + 1, Total: len(items), DownloadProgress: progress})
@@ -117,6 +123,19 @@ func DownloadAll(
 		result.Downloads = append(result.Downloads, *download)
 	}
 	return result, nil
+}
+
+func mergeFileInfo(fallback, preferred FileInfo) FileInfo {
+	if preferred.Author == "" {
+		preferred.Author = fallback.Author
+	}
+	if preferred.VideoID == "" {
+		preferred.VideoID = fallback.VideoID
+	}
+	if preferred.Referer == "" {
+		preferred.Referer = fallback.Referer
+	}
+	return preferred
 }
 
 func downloadVariant(

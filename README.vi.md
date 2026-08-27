@@ -6,8 +6,8 @@
 
 Repository này cung cấp một thư viện Go cùng công cụ dòng lệnh:
 
-- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
-- **CLI**: `tiktok_crawler` tự nhận diện loại URL, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
+- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, profile creator, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
+- **CLI**: `tiktok_crawler` tự nhận diện loại URL, crawl profile creator, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
 
 Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
 
@@ -25,7 +25,7 @@ client, _ := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-Hoặc dùng trực tiếp các subpackage: `video`, `photo`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
+Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `photo`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 
@@ -118,6 +118,27 @@ go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/12
 ```
 
 File tải xuống được ghi vào một file tạm và chỉ được chuyển đến đường dẫn đích sau khi hoàn tất. File đã tồn tại sẽ không bao giờ bị ghi đè; hãy chọn đường dẫn `-output` khác khi cần. URL media có chữ ký sẽ hết hạn, vì vậy hãy thu thập lại video nếu URL cũ không còn hoạt động.
+
+## Profile creator
+
+In metadata user công khai và canonical URL của 10 video public mới nhất mà creator embed của TikTok cung cấp:
+
+```bash
+go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@forever0404_'
+```
+
+JSON gồm `user`, `listing`, `video_urls` và `videos`. API phân trang chính `/api/post/item_list/` hiện được bảo vệ bằng chữ ký `X-Dynosaur`/`X-Gnarly` do browser tạo và vẫn có thể trả interactive captcha dù request được ký đúng. Vì vậy crawler dùng creator card SSR công khai `/embed/@username`: nhánh này ổn định và trả 10 video public mới nhất, nhưng không cung cấp toàn bộ archive của user.
+
+Khi không dùng `-json`, crawler đưa từng canonical URL trở lại video resolver hiện tại rồi tải toàn bộ video nhận được. `-quality`, `-watermark` và `-output` áp dụng cho cả collection:
+
+```bash
+go run ./cmd/tiktok_crawler \
+  -quality 1080p \
+  -output "$HOME/Downloads/forever0404-videos" \
+  'https://www.tiktok.com/@forever0404_'
+```
+
+Nếu không truyền `-output`, các file được lưu trong thư mục mới `<username>_videos/`. Mỗi tên file vẫn giữ TikTok video ID tương ứng.
 
 ## Photo Post
 

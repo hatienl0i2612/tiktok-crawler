@@ -1,6 +1,6 @@
 // Package tiktokcrawler is the high-level entry point for the TikTok Crawler
 // library. It detects the kind of a TikTok URL and resolves it through the
-// specialized video, photo, livestream, or shortdrama clients.
+// specialized video, photo, profile, livestream, or shortdrama clients.
 //
 // # Quick start
 //
@@ -18,7 +18,7 @@
 //	}
 //
 // For more focused control, import the subpackages directly (video, photo,
-// livestream, shortdrama, cookies, downloader).
+// profile, livestream, shortdrama, cookies, downloader).
 package tiktokcrawler
 
 import (
@@ -29,6 +29,7 @@ import (
 
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/photo"
+	"github.com/hatienl0i2612/tiktok-crawler/profile"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
@@ -39,6 +40,7 @@ var (
 	videoPathPattern      = regexp.MustCompile(`^/@[^/]+/video/[0-9]+/?$`)
 	photoPathPattern      = regexp.MustCompile(`^/@[^/]+/photo/[0-9]+/?$`)
 	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
+	profilePathPattern    = regexp.MustCompile(`^/@[^/]+/?$`)
 )
 
 // Kind describes the type of a TikTok content URL.
@@ -53,6 +55,8 @@ const (
 	KindLive Kind = "livestream"
 	// KindShortDrama is a TikTok Short Drama episode.
 	KindShortDrama Kind = "shortdrama"
+	// KindProfile is a public TikTok creator profile under an /@username URL.
+	KindProfile Kind = "profile"
 )
 
 // DetectKind validates a TikTok URL and returns its content kind. It returns
@@ -71,8 +75,10 @@ func DetectKind(rawURL string) (Kind, error) {
 		return KindPhoto, nil
 	case shortDramaPathPattern.MatchString(parsed.EscapedPath()):
 		return KindShortDrama, nil
+	case profilePathPattern.MatchString(parsed.EscapedPath()):
+		return KindProfile, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, Short Drama episode, or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, profile, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
 }
 
@@ -86,6 +92,7 @@ type ClientOptions struct {
 type Client struct {
 	video      *video.Client
 	photo      *photo.Client
+	profile    *profile.Client
 	livestream *livestream.Client
 	shortdrama *shortdrama.Client
 }
@@ -101,6 +108,10 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	profileClient, err := profile.NewClient(profile.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
+	if err != nil {
+		return nil, err
+	}
 	liveClient, err := livestream.NewClient(livestream.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
 	if err != nil {
 		return nil, err
@@ -109,7 +120,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{video: videoClient, photo: photoClient, livestream: liveClient, shortdrama: dramaClient}, nil
+	return &Client{video: videoClient, photo: photoClient, profile: profileClient, livestream: liveClient, shortdrama: dramaClient}, nil
 }
 
 // Video returns the underlying video client for focused resolution or download.
@@ -117,6 +128,9 @@ func (client *Client) Video() *video.Client { return client.video }
 
 // Photo returns the underlying Photo Post client for focused resolution or download.
 func (client *Client) Photo() *photo.Client { return client.photo }
+
+// Profile returns the underlying creator profile client.
+func (client *Client) Profile() *profile.Client { return client.profile }
 
 // Livestream returns the underlying livestream client for focused resolution.
 func (client *Client) Livestream() *livestream.Client { return client.livestream }
@@ -129,6 +143,7 @@ type Result struct {
 	Kind       Kind
 	Video      *video.Result
 	Photo      *photo.Result
+	Profile    *profile.Result
 	Livestream *livestream.Result
 	ShortDrama *shortdrama.Result
 }
@@ -152,6 +167,12 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 			return nil, err
 		}
 		return &Result{Kind: KindPhoto, Photo: result}, nil
+	case KindProfile:
+		result, err := client.profile.Resolve(ctx, rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return &Result{Kind: KindProfile, Profile: result}, nil
 	case KindLive:
 		result, err := client.livestream.Resolve(ctx, rawURL)
 		if err != nil {

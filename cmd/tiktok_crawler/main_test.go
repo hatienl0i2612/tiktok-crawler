@@ -20,6 +20,7 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 	const photoURL = "https://www.tiktok.com/@5gvietteldv/photo/7666697358540852500"
 	const liveURL = "https://www.tiktok.com/@weathernewslive/live"
 	const shortDramaURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
+	const profileURL = "https://www.tiktok.com/@forever0404_"
 	tests := []struct {
 		name string
 		args []string
@@ -61,6 +62,11 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 			want: options{inputURL: photoURL, content: contentTypePhoto, output: "images", quality: "best", watermark: true, timeout: 20 * time.Second},
 		},
 		{
+			name: "profile uses video options and an output directory",
+			args: []string{profileURL, "-quality", "1080p", "-output", "videos", "-watermark"},
+			want: options{inputURL: profileURL, content: contentTypeProfile, output: "videos", quality: "1080p", watermark: true, timeout: 20 * time.Second},
+		},
+		{
 			name: "repeated headers flag",
 			args: []string{liveURL, "-headers", "X-Custom: abc", "-headers", "user-agent: custom-ua"},
 			want: options{inputURL: liveURL, content: contentTypeLive, quality: "best", headers: map[string]string{"X-Custom": "abc", "User-Agent": "custom-ua"}, timeout: 20 * time.Second},
@@ -99,8 +105,10 @@ func TestDetectContentType(t *testing.T) {
 		{"https://www.tiktok.com/@example/video/1234567890123456789?lang=en", contentTypeVideo, false},
 		{"https://www.tiktok.com/@example/photo/1234567890123456789", contentTypePhoto, false},
 		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", contentTypeShortDrama, false},
+		{"https://www.tiktok.com/@example", contentTypeProfile, false},
+		{"https://www.tiktok.com/@example/", contentTypeProfile, false},
 		{"https://example.com/@example/live", "", true},
-		{"https://www.tiktok.com/@example", "", true},
+		{"https://www.tiktok.com/explore", "", true},
 	}
 	for _, test := range tests {
 		got, err := detectContentType(test.url)
@@ -113,6 +121,12 @@ func TestDetectContentType(t *testing.T) {
 		if err != nil || got != test.want {
 			t.Errorf("detectContentType(%q) = %q, %v; want %q", test.url, got, err, test.want)
 		}
+	}
+}
+
+func TestDefaultProfileOutputDirectory(t *testing.T) {
+	if got := defaultProfileOutputDirectory("forever0404_"); got != "forever0404_videos" {
+		t.Fatalf("defaultProfileOutputDirectory() = %q", got)
 	}
 }
 

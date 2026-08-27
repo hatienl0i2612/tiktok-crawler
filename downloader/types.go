@@ -43,12 +43,16 @@ type DownloadStart struct {
 // collection, such as one image in a TikTok Photo Post.
 type BatchItem struct {
 	Variants []media.Variant
+	// File optionally overrides the collection-level author, content ID, and
+	// Referer. A non-empty VideoID also selects the normal per-video filename.
+	File FileInfo
 }
 
 // BatchOptions controls downloading an ordered media collection. OutputDir is
 // a directory, unlike Options.OutputPath which is a single file path.
 type BatchOptions struct {
 	OutputDir   string
+	Quality     string
 	Watermarked bool
 	Progress    func(BatchProgress)
 	OnStart     func(BatchStart)
@@ -65,6 +69,7 @@ type BatchProgress struct {
 type BatchStart struct {
 	Index int
 	Total int
+	File  FileInfo
 	DownloadStart
 }
 

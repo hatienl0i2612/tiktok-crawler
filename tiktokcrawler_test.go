@@ -17,8 +17,10 @@ func TestDetectKind(t *testing.T) {
 		{"https://www.tiktok.com/@example/photo/1234567890123456789", KindPhoto, false},
 		{"https://www.tiktok.com/@example/live", KindLive, false},
 		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", KindShortDrama, false},
+		{"https://www.tiktok.com/@example", KindProfile, false},
+		{"https://www.tiktok.com/@example/", KindProfile, false},
 		{"https://example.com/@example/video/123", "", true},
-		{"https://www.tiktok.com/@example", "", true},
+		{"https://www.tiktok.com/explore", "", true},
 	}
 	for _, test := range tests {
 		kind, err := DetectKind(test.url)
@@ -39,7 +41,7 @@ func TestNewClientExposesSubClients(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	if client.Video() == nil || client.Photo() == nil || client.Livestream() == nil || client.ShortDrama() == nil {
+	if client.Video() == nil || client.Photo() == nil || client.Profile() == nil || client.Livestream() == nil || client.ShortDrama() == nil {
 		t.Fatal("NewClient must expose all sub-clients")
 	}
 }
@@ -55,7 +57,7 @@ func TestClientResolveDetectsKindBeforeNetwork(t *testing.T) {
 	if _, err := client.Resolve(ctx, "https://example.com/not-tiktok"); err == nil {
 		t.Fatal("Resolve() succeeded for a non-TikTok URL")
 	}
-	if _, err := client.Resolve(ctx, "https://www.tiktok.com/@example"); err == nil {
+	if _, err := client.Resolve(ctx, "https://www.tiktok.com/explore"); err == nil {
 		t.Fatal("Resolve() succeeded for an unsupported TikTok URL")
 	}
 }
