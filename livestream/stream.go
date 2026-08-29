@@ -118,6 +118,23 @@ func sortStreams(streams []Stream) {
 	})
 }
 
+// BestStream selects TikTok's highest-quality stream, preferring H.264, the
+// main CDN line, and HLS when multiple endpoints have the same quality. The
+// input slice is not modified.
+func BestStream(streams []Stream) (Stream, error) {
+	if len(streams) == 0 {
+		return Stream{}, errors.New("TikTok LIVE returned no playable streams")
+	}
+	candidates := append([]Stream(nil), streams...)
+	sortStreams(candidates)
+	for _, stream := range candidates {
+		if strings.TrimSpace(stream.URL) != "" {
+			return stream, nil
+		}
+	}
+	return Stream{}, errors.New("TikTok LIVE returned no playable stream URL")
+}
+
 func qualityRank(quality string) int {
 	return rank(qualityOrder, normalizeQuality(quality))
 }

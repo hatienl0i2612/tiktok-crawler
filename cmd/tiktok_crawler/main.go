@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/hatienl0i2612/tiktok-crawler/cliargs"
@@ -20,6 +19,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/downloader"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/mpv"
 	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/profile"
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
@@ -27,7 +27,10 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
 
-const videoRequestTimeout = 5 * time.Minute
+const (
+	videoRequestTimeout = 5 * time.Minute
+	mpvInstallTimeout   = 10 * time.Minute
+)
 
 var (
 	livePathPattern       = regexp.MustCompile(`^/@[^/]+/live/?$`)
@@ -443,9 +446,8 @@ func runLive(options options, cookie string, stdout, stderr io.Writer) error {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), options.timeout)
-	defer cancel()
-
 	result, err := client.Resolve(ctx, options.inputURL)
+	cancel()
 	if err != nil {
 		return err
 	}
@@ -457,7 +459,35 @@ func runLive(options options, cookie string, stdout, stderr io.Writer) error {
 	if options.json {
 		return printJSON(stdout, result)
 	}
-	return printStreams(stdout, result.Streams)
+	return openLiveWithMPV(result, mpv.NewManager(mpv.Options{Status: stderr}), stdout, stderr)
+}
+
+type livePlayer interface {
+	Ensure(context.Context) (string, error)
+	Play(context.Context, string, string, mpv.PlayOptions) error
+}
+
+func openLiveWithMPV(result *livestream.Result, player livePlayer, stdout, stderr io.Writer) error {
+	stream, err := livestream.BestStream(result.Streams)
+	if err != nil {
+		return err
+	}
+	installContext, cancelInstall := context.WithTimeout(context.Background(), mpvInstallTimeout)
+	executable, err := player.Ensure(installContext)
+	cancelInstall()
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(stderr, "Opening TikTok LIVE @%s in mpv (%s, %s, %s)\n", result.User.UniqueID, stream.Quality, stream.Codec, stream.Protocol); err != nil {
+		return err
+	}
+	title := "TikTok LIVE @" + result.User.UniqueID
+	return player.Play(context.Background(), executable, stream.URL, mpv.PlayOptions{
+		Referer: result.FinalURL,
+		Title:   title,
+		Stdout:  stdout,
+		Stderr:  stderr,
+	})
 }
 
 func printJSON(writer io.Writer, result any) error {
@@ -470,19 +500,6 @@ func printJSON(writer io.Writer, result any) error {
 func printSummary(writer io.Writer, result *livestream.Result) error {
 	_, err := fmt.Fprintf(writer, "@%s | %s | room=%s | viewers=%d | source=%s\n", result.User.UniqueID, result.User.Nickname, result.User.RoomID, result.Live.ViewerCount, result.Source)
 	return err
-}
-
-func printStreams(writer io.Writer, streams []livestream.Stream) error {
-	table := tabwriter.NewWriter(writer, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(table, "CODEC\tQUALITY\tLINE\tFORMAT\tRESOLUTION\tBITRATE\tEXPIRES\tURL")
-	for _, stream := range streams {
-		expires := ""
-		if stream.ExpiresAt != nil {
-			expires = stream.ExpiresAt.Format(time.RFC3339)
-		}
-		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n", stream.Codec, stream.Quality, stream.Line, stream.Protocol, stream.Resolution, stream.Bitrate, expires, stream.URL)
-	}
-	return table.Flush()
 }
 
 type progressDisplay struct {

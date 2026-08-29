@@ -2,18 +2,44 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/mpv"
 )
 
 type failingWriter struct{ err error }
 
 func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }
+
+type fakeLivePlayer struct {
+	executable string
+	ensured    bool
+	played     bool
+	streamURL  string
+	options    mpv.PlayOptions
+}
+
+func (player *fakeLivePlayer) Ensure(context.Context) (string, error) {
+	player.ensured = true
+	return player.executable, nil
+}
+
+func (player *fakeLivePlayer) Play(_ context.Context, executable, streamURL string, options mpv.PlayOptions) error {
+	if executable != player.executable {
+		return errors.New("unexpected executable")
+	}
+	player.played = true
+	player.streamURL = streamURL
+	player.options = options
+	return nil
+}
 
 func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 	const videoURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
@@ -135,6 +161,31 @@ func TestPrintSummaryReturnsWriterError(t *testing.T) {
 	err := printSummary(failingWriter{err: want}, &livestream.Result{})
 	if !errors.Is(err, want) {
 		t.Fatalf("printSummary() error = %v, want %v", err, want)
+	}
+}
+
+func TestOpenLiveWithMPVSelectsBestStream(t *testing.T) {
+	result := &livestream.Result{
+		FinalURL: "https://www.tiktok.com/@example/live",
+		User:     livestream.User{UniqueID: "example"},
+		Streams: []livestream.Stream{
+			{Codec: "h264", Quality: "hd", Protocol: "hls", URL: "https://pull.tiktokcdn.com/hd.m3u8"},
+			{Codec: "h264", Quality: "origin", Protocol: "hls", URL: "https://pull.tiktokcdn.com/best.m3u8"},
+		},
+	}
+	player := &fakeLivePlayer{executable: "/tmp/mpv"}
+	var stdout, stderr bytes.Buffer
+	if err := openLiveWithMPV(result, player, &stdout, &stderr); err != nil {
+		t.Fatalf("openLiveWithMPV(): %v", err)
+	}
+	if !player.ensured || !player.played || player.streamURL != "https://pull.tiktokcdn.com/best.m3u8" {
+		t.Fatalf("player = %+v", player)
+	}
+	if player.options.Referer != result.FinalURL || player.options.Title != "TikTok LIVE @example" {
+		t.Fatalf("play options = %+v", player.options)
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "origin, h264, hls") {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
 }
 

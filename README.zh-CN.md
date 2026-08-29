@@ -7,7 +7,7 @@
 本仓库包含一个 Go 库和一个命令行工具：
 
 - **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、创作者主页、图文帖、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
-- **CLI**：`tiktok_crawler` 自动识别 URL 类型，抓取公开创作者主页，下载公开 TikTok 视频、图文帖和短剧剧集，或获取公开 TikTok LIVE 直播间的带签名播放地址。
+- **CLI**：`tiktok_crawler` 自动识别 URL 类型，抓取公开创作者主页，下载公开 TikTok 视频、图文帖和短剧剧集，并使用 mpv 打开最佳公开 TikTok LIVE 播放流。
 
 该工具使用 Go 标准库，并通过 `browsercookie` 包可选地从已安装的浏览器中导入 cookie。
 
@@ -25,7 +25,7 @@ client, err := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-也可直接使用子包：`video`、`profile`、`photo`、`livestream`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
+也可直接使用子包：`video`、`profile`、`photo`、`livestream`、`mpv`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
 
 ## 下载发行版
 
@@ -182,29 +182,31 @@ TikTok 允许公开获取剧集元数据，但目前要求使用浏览器会话�
 
 ## 直播
 
-解析 LIVE 直播间，并以表格形式输出所有可用播放流：
+解析 LIVE 直播间、选择最佳播放流，并使用 mpv 打开：
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
 ```
 
-请将 `example` 替换为要解析的 LIVE 频道 TikTok 用户名。
+请将 `example` 替换为要观看的 LIVE 频道 TikTok 用户名。普通 LIVE 命令不再打印签名 URL 列表。工具优先选择 `origin`，然后选择其余最高画质；画质相同时依次优先 H.264、`main` CDN 线路和 HLS。
 
-正在直播的 LIVE 房间输出示例：
+首次运行时，工具会先在 `PATH` 中查找 `mpv`。若未安装，CLI 会将便携版本下载并缓存到 `os.TempDir()/tiktok-crawler/mpv/<os>-<arch>`：
+
+| 平台 | 便携版本来源 |
+| --- | --- |
+| Windows `amd64`、`arm64`、`386` | `mpv-player/mpv` 官方稳定版 ZIP |
+| macOS `arm64`、`amd64` | `mpv-player/mpv` 官方稳定版 ZIP |
+| Linux `amd64`、`arm64` | `pkgforge-dev/mpv-AppImage` 的 AppImage |
+
+每个下载文件都有大小限制，并会在解压或执行前根据 GitHub Release 元数据验证 SHA-256。`os.TempDir` 会自动选择当前操作系统的临时目录；后续运行会复用系统 mpv 或缓存的便携版本。
+
+正在直播的 LIVE 房间状态示例：
 
 ```text
-CODEC  QUALITY  LINE  FORMAT  RESOLUTION  BITRATE  EXPIRES               URL
-h265   origin   main  hls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.m3u8?expire=1788176198&sign=ab662553d3d43198f00eee6ff79263c0
-h265   origin   main  flv     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.flv?expire=1788176198&sign=ce30a95c277094da2bb81d4d0e7662e0
-h265   origin   main  cmaf    1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.mpd?expire=1788176198&sign=f1e862ed8613e60ba0ad665fd0ab2cb4
-h265   origin   main  lls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.sdp?expire=1788176198&sign=4efcf378b009c553ec62a120b3b39e8c
-h265   uhd_60   main  hls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.m3u8?expire=1788176198&sign=0c33a22df71b89308ad48b8142e1606e
-h265   uhd_60   main  flv     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.flv?expire=1788176198&sign=f393522bdabef8d7ef0c25500b71ef2d
-h265   uhd_60   main  cmaf    1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.mpd?expire=1788176198&sign=971ff4d9cfb652918867b2ae6443c923
-h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.sdp?expire=1788176198&sign=6bd520bc35d399aa15e9cc7743f345b2
+Opening TikTok LIVE @example in mpv (origin, h264, hls)
 ```
 
-以 JSON 格式输出完整的直播间元数据：
+若要在不启动 mpv 的情况下查看完整房间元数据和播放流 URL，请使用 JSON 模式：
 
 ```bash
 go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'

@@ -7,7 +7,7 @@
 Repository này cung cấp một thư viện Go cùng công cụ dòng lệnh:
 
 - **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, profile creator, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
-- **CLI**: `tiktok_crawler` tự nhận diện loại URL, crawl profile creator, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời lấy URL phát có chữ ký cho phòng TikTok LIVE công khai.
+- **CLI**: `tiktok_crawler` tự nhận diện loại URL, crawl profile creator, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời mở stream TikTok LIVE tốt nhất bằng mpv.
 
 Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
 
@@ -25,7 +25,7 @@ client, _ := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `photo`, `livestream`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
+Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `photo`, `livestream`, `mpv`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 
@@ -182,29 +182,31 @@ TikTok cho phép lấy metadata tập công khai nhưng hiện yêu cầu `msTok
 
 ## Livestream
 
-Lấy thông tin một phòng LIVE và in tất cả stream hiện có dưới dạng bảng:
+Resolve phòng LIVE, chọn stream tốt nhất và mở bằng mpv:
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
 ```
 
-Thay `example` bằng username TikTok của kênh LIVE mà bạn muốn lấy stream.
+Thay `example` bằng username TikTok của kênh LIVE mà bạn muốn xem. Lệnh LIVE thông thường không còn in danh sách signed URL. Tool ưu tiên quality `origin`, sau đó tới quality tốt nhất còn lại; nếu cùng quality thì ưu tiên H.264, CDN line `main`, rồi HLS.
 
-Output mẫu cho một phòng LIVE đang hoạt động:
+Ở lần chạy đầu tiên, tool tìm `mpv` trong `PATH`. Nếu chưa có, CLI tải và cache bản portable trong `os.TempDir()/tiktok-crawler/mpv/<os>-<arch>`:
+
+| Nền tảng | Nguồn bản portable |
+| --- | --- |
+| Windows `amd64`, `arm64`, `386` | ZIP stable first-party từ `mpv-player/mpv` |
+| macOS `arm64`, `amd64` | ZIP stable first-party từ `mpv-player/mpv` |
+| Linux `amd64`, `arm64` | AppImage từ `pkgforge-dev/mpv-AppImage` |
+
+Mỗi artifact bị giới hạn kích thước và được kiểm SHA-256 theo metadata GitHub Release trước khi giải nén hoặc chạy. `os.TempDir` tự chọn thư mục temp đúng với hệ điều hành. Những lần sau sẽ tái sử dụng mpv trong hệ thống hoặc binary portable đã cache.
+
+Status mẫu cho một phòng LIVE đang hoạt động:
 
 ```text
-CODEC  QUALITY  LINE  FORMAT  RESOLUTION  BITRATE  EXPIRES               URL
-h265   origin   main  hls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.m3u8?expire=1788176198&sign=ab662553d3d43198f00eee6ff79263c0
-h265   origin   main  flv     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.flv?expire=1788176198&sign=ce30a95c277094da2bb81d4d0e7662e0
-h265   origin   main  cmaf    1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.mpd?expire=1788176198&sign=f1e862ed8613e60ba0ad665fd0ab2cb4
-h265   origin   main  lls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.sdp?expire=1788176198&sign=4efcf378b009c553ec62a120b3b39e8c
-h265   uhd_60   main  hls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.m3u8?expire=1788176198&sign=0c33a22df71b89308ad48b8142e1606e
-h265   uhd_60   main  flv     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.flv?expire=1788176198&sign=f393522bdabef8d7ef0c25500b71ef2d
-h265   uhd_60   main  cmaf    1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.mpd?expire=1788176198&sign=971ff4d9cfb652918867b2ae6443c923
-h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.sdp?expire=1788176198&sign=6bd520bc35d399aa15e9cc7743f345b2
+Opening TikTok LIVE @example in mpv (origin, h264, hls)
 ```
 
-In toàn bộ metadata của phòng dưới dạng JSON:
+Muốn xem toàn bộ metadata và URL stream mà không mở mpv, dùng JSON mode:
 
 ```bash
 go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'

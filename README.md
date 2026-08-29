@@ -7,7 +7,7 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 This repository contains a Go library plus a command-line tool:
 
 - **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, creator profiles, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
-- **CLI**: `tiktok_crawler` detects the URL type, crawls public creator profiles, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and resolves signed playback URLs for public TikTok LIVE rooms.
+- **CLI**: `tiktok_crawler` detects the URL type, crawls public creator profiles, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and opens the best public TikTok LIVE stream in mpv.
 
 The code uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
 
@@ -58,6 +58,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/profile"     // profile.Result, profile.User, ...
 	"github.com/hatienl0i2612/tiktok-crawler/photo"       // photo.Result, photo.Image, ...
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
+	"github.com/hatienl0i2612/tiktok-crawler/mpv"         // portable mpv discovery, install, and playback
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"  // shortdrama.Result, ...
 	"github.com/hatienl0i2612/tiktok-crawler/cookies"     // cookies.LoadTikTokCookieHeader, ...
 	"github.com/hatienl0i2612/tiktok-crawler/downloader"  // downloader.Download, ...
@@ -221,29 +222,31 @@ TikTok exposes episode metadata publicly but currently requires a valid browser 
 
 ## Livestreams
 
-Resolve a LIVE room and print every available stream as a table:
+Resolve a LIVE room, select its best stream, and open it in mpv:
 
 ```bash
 go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
 ```
 
-Replace `example` with the TikTok username of the LIVE channel you want to resolve.
+Replace `example` with the TikTok username of the LIVE channel you want to watch. The normal LIVE command no longer prints signed URLs. It prefers `origin`, then the best remaining quality; equal-quality streams prefer H.264, the main CDN line, and HLS.
 
-Sample output for an active LIVE room:
+The first run looks for `mpv` in `PATH`. If it is absent, the CLI downloads and caches a portable build under `os.TempDir()/tiktok-crawler/mpv/<os>-<arch>`:
+
+| Platform | Portable source |
+| --- | --- |
+| Windows `amd64`, `arm64`, `386` | First-party stable ZIP from `mpv-player/mpv` |
+| macOS `arm64`, `amd64` | First-party stable ZIP from `mpv-player/mpv` |
+| Linux `amd64`, `arm64` | AppImage from `pkgforge-dev/mpv-AppImage` |
+
+Every downloaded artifact is limited in size and verified against the SHA-256 digest in GitHub release metadata before extraction or execution. The OS temporary directory is selected with Go's `os.TempDir`, so its concrete location follows the host operating system. A later run reuses either the system mpv or the cached portable executable.
+
+Sample status for an active LIVE room:
 
 ```text
-CODEC  QUALITY  LINE  FORMAT  RESOLUTION  BITRATE  EXPIRES               URL
-h265   origin   main  hls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.m3u8?expire=1788176198&sign=ab662553d3d43198f00eee6ff79263c0
-h265   origin   main  flv     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.flv?expire=1788176198&sign=ce30a95c277094da2bb81d4d0e7662e0
-h265   origin   main  cmaf    1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308/index.mpd?expire=1788176198&sign=f1e862ed8613e60ba0ad665fd0ab2cb4
-h265   origin   main  lls     1920x1080   2224000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308.sdp?expire=1788176198&sign=4efcf378b009c553ec62a120b3b39e8c
-h265   uhd_60   main  hls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-hls-f16-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.m3u8?expire=1788176198&sign=0c33a22df71b89308ad48b8142e1606e
-h265   uhd_60   main  flv     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.flv?expire=1788176198&sign=f393522bdabef8d7ef0c25500b71ef2d
-h265   uhd_60   main  cmaf    1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560/index.mpd?expire=1788176198&sign=971ff4d9cfb652918867b2ae6443c923
-h265   uhd_60   main  lls     1920x1080   4000000  2026-08-31T11:36:38Z  https://pull-f5-sg01.tiktokcdn.com/game/stream-1561072868968628308_uhd560.sdp?expire=1788176198&sign=6bd520bc35d399aa15e9cc7743f345b2
+Opening TikTok LIVE @example in mpv (origin, h264, hls)
 ```
 
-Print complete room metadata as JSON:
+To inspect all room metadata and stream URLs without launching mpv, use JSON mode:
 
 ```bash
 go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'

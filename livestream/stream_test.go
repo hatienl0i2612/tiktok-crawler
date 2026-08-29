@@ -114,6 +114,29 @@ func TestSortStreams(t *testing.T) {
 	}
 }
 
+func TestBestStreamSortsWithoutMutatingInput(t *testing.T) {
+	t.Parallel()
+
+	streams := []Stream{
+		{Codec: "h265", Quality: "origin", Line: "main", Protocol: "hls", URL: "https://pull.tiktokcdn.com/h265.m3u8"},
+		{Codec: "h264", Quality: "hd", Line: "main", Protocol: "hls", URL: "https://pull.tiktokcdn.com/hd.m3u8"},
+		{Codec: "h264", Quality: "origin", Line: "main", Protocol: "hls", URL: "https://pull.tiktokcdn.com/best.m3u8"},
+	}
+	best, err := BestStream(streams)
+	if err != nil {
+		t.Fatalf("BestStream(): %v", err)
+	}
+	if best.URL != "https://pull.tiktokcdn.com/best.m3u8" {
+		t.Fatalf("best stream = %+v", best)
+	}
+	if streams[0].URL != "https://pull.tiktokcdn.com/h265.m3u8" {
+		t.Fatal("BestStream() mutated its input")
+	}
+	if _, err := BestStream(nil); err == nil {
+		t.Fatal("BestStream(nil) succeeded")
+	}
+}
+
 func TestStreamHelpers(t *testing.T) {
 	t.Parallel()
 
