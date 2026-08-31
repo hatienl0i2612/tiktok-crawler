@@ -310,3 +310,9 @@ go build -o tiktok_crawler ./cmd/tiktok_crawler
 ```
 
 The generated root binaries are ignored by Git. You can also place builds under `bin/`.
+
+## Contributing
+
+Contributions are welcome. If you would like to improve the crawler, add support for another TikTok format, or refine the documentation, please open a pull request.
+
+If you encounter a bug or unexpected TikTok response, please [open an issue](https://github.com/hatienl0i2612/tiktok-crawler/issues) with the affected URL, command, error output, operating system, and tool version when possible. Do not include private cookies or authentication data.

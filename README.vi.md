@@ -268,3 +268,9 @@ go build -o tiktok_crawler ./cmd/tiktok_crawler
 ```
 
 Các binary được tạo tại thư mục gốc đã được Git bỏ qua. Bạn cũng có thể đặt chúng trong thư mục `bin/`.
+
+## Đóng góp
+
+Mọi đóng góp đều được chào đón. Nếu bạn muốn cải thiện crawler, hỗ trợ thêm định dạng TikTok hoặc hoàn thiện tài liệu, hãy gửi pull request.
+
+Nếu gặp lỗi hoặc response TikTok bất thường, hãy [mở issue](https://github.com/hatienl0i2612/tiktok-crawler/issues) và cung cấp URL bị ảnh hưởng, command đã chạy, error output, hệ điều hành và version của tool nếu có thể. Không đăng cookie riêng tư hoặc dữ liệu xác thực.

@@ -268,3 +268,9 @@ go build -o tiktok_crawler ./cmd/tiktok_crawler
 ```
 
 在项目根目录生成的可执行文件已被 Git 忽略。你也可以将构建结果放到 `bin/` 目录中。
+
+## 贡献
+
+欢迎任何形式的贡献。如果你希望改进抓取器、支持更多 TikTok 格式或完善文档，请提交 Pull Request。
+
+如果遇到错误或异常的 TikTok 响应，请[创建 Issue](https://github.com/hatienl0i2612/tiktok-crawler/issues)，并尽可能提供相关 URL、执行命令、错误输出、操作系统和工具版本。请勿提交私人 Cookie 或身份验证数据。

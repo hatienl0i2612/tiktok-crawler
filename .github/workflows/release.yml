@@ -85,7 +85,12 @@ jobs:
           set -euo pipefail
 
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w" -o "dist/tiktok_crawler-${GOOS}-${GOARCH}${EXTENSION}" ./cmd/tiktok_crawler
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            build_version="${GITHUB_REF_NAME}"
+          else
+            build_version="dev-${GITHUB_SHA:0:12}"
+          fi
+          go build -trimpath -ldflags="-s -w -X main.buildVersion=${build_version}" -o "dist/tiktok_crawler-${GOOS}-${GOARCH}${EXTENSION}" ./cmd/tiktok_crawler
 
       - name: Upload package
         uses: actions/upload-artifact@v7

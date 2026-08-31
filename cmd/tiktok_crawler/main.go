@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -25,12 +26,22 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
+	"golang.org/x/mod/semver"
 )
 
 const (
-	videoRequestTimeout = 5 * time.Minute
-	mpvInstallTimeout   = 10 * time.Minute
+	videoRequestTimeout     = 5 * time.Minute
+	mpvInstallTimeout       = 10 * time.Minute
+	versionCheckTimeout     = 5 * time.Second
+	maxReleaseResponseSize  = 1 << 20
+	latestReleaseAPI        = "https://api.github.com/repos/hatienl0i2612/tiktok-crawler/releases/latest"
+	projectLatestReleaseURL = "https://github.com/hatienl0i2612/tiktok-crawler/releases/latest"
+	cliDescription          = "Crawl and download public TikTok videos, photos, profiles, Short Drama, and play LIVE streams with mpv."
 )
+
+var buildVersion = "dev"
+
+var latestReleaseFetcher = fetchLatestRelease
 
 var (
 	livePathPattern       = regexp.MustCompile(`^/@[^/]+/live/?$`)
@@ -58,6 +69,7 @@ type options struct {
 	quality        string
 	watermark      bool
 	verbose        bool
+	version        bool
 	cookiesFile    string
 	cookiesBrowser string
 	headers        map[string]string
@@ -78,6 +90,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 			return nil
 		}
 		return err
+	}
+	if options.version {
+		return printVersion(stdout, stderr)
 	}
 	cookie, err := resolveCookieSources(options)
 	if err != nil {
@@ -158,6 +173,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for Photo Posts and LIVE URLs)")
 	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked video or image variant (ignored for LIVE URLs)")
 	flags.BoolVar(&options.verbose, "verbose", false, "print a LIVE room summary to stderr (ignored for video URLs)")
+	flags.BoolVar(&options.version, "version", false, "print CLI description and version")
 	flags.StringVar(&options.cookiesFile, "cookies-file", "", "path to a TikTok cookies .txt file (Netscape cookie-jar export or raw Cookie header value)")
 	flags.StringVar(&options.cookiesBrowser, "cookies-from-browser", "", "read a TikTok Cookie header from an installed browser (brave, chrome, edge, firefox, safari, ...)")
 	flags.Var(&headerValues, "headers", "additional HTTP header to send on every request, as 'Key: Value'; User-Agent can be set here; may be repeated")
@@ -169,6 +185,12 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 
 	if err := flags.Parse(cliargs.ReorderInterspersedFlags(args, "output", "quality", "cookies-file", "cookies-from-browser", "headers", "timeout")); err != nil {
 		return options, err
+	}
+	if options.version {
+		if flags.NArg() != 0 {
+			return options, errors.New("-version does not accept a TikTok URL or other arguments")
+		}
+		return options, nil
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
@@ -214,6 +236,118 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 		}
 	}
 	return options, nil
+}
+
+func printVersion(writer, warningWriter io.Writer) error {
+	current := currentVersion()
+	if _, err := fmt.Fprintf(writer, "tiktok_crawler %s\n%s\n", current, cliDescription); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
+	latest, err := latestReleaseFetcher(ctx)
+	cancel()
+	if err != nil || !newerVersionAvailable(current, latest) {
+		return nil
+	}
+	_, err = fmt.Fprintf(
+		warningWriter,
+		"Warning: a newer tiktok_crawler version is available: %s (current: %s).\nUpdate: %s\n",
+		latest,
+		current,
+		projectLatestReleaseURL,
+	)
+	return err
+}
+
+func fetchLatestRelease(ctx context.Context) (string, error) {
+	return fetchLatestReleaseFrom(ctx, http.DefaultClient, latestReleaseAPI)
+}
+
+func fetchLatestReleaseFrom(ctx context.Context, client *http.Client, endpoint string) (string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	request.Header.Set("User-Agent", "tiktok-crawler-version-check")
+	response, err := client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("fetch latest release: HTTP %s", response.Status)
+	}
+	body, err := tiktok.ReadLimited(response.Body, maxReleaseResponseSize)
+	if err != nil {
+		return "", err
+	}
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(body, &release); err != nil {
+		return "", fmt.Errorf("decode latest release: %w", err)
+	}
+	latest := normalizeSemanticVersion(release.TagName)
+	if latest == "" {
+		return "", errors.New("latest GitHub release has no valid semantic version")
+	}
+	return latest, nil
+}
+
+func newerVersionAvailable(current, latest string) bool {
+	current = normalizeSemanticVersion(current)
+	latest = normalizeSemanticVersion(latest)
+	return current != "" && latest != "" && semver.Compare(current, latest) < 0
+}
+
+func normalizeSemanticVersion(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if value[0] != 'v' {
+		value = "v" + value
+	}
+	if !semver.IsValid(value) {
+		return ""
+	}
+	return value
+}
+
+func currentVersion() string {
+	if value := strings.TrimSpace(buildVersion); value != "" && value != "dev" {
+		return value
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	if value := strings.TrimSpace(info.Main.Version); value != "" && value != "(devel)" {
+		return value
+	}
+	revision := ""
+	modified := false
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
+		}
+	}
+	if revision == "" {
+		return "dev"
+	}
+	if len(revision) > 12 {
+		revision = revision[:12]
+	}
+	value := "dev+" + revision
+	if modified {
+		value += ".dirty"
+	}
+	return value
 }
 
 func detectContentType(rawURL string) (contentType, error) {

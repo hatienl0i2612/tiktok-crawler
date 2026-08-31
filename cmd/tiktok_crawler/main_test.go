@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strings"
@@ -118,6 +120,103 @@ func TestParseOptionsRejectsInvalidHeaders(t *testing.T) {
 	_, err := parseOptions([]string{"https://www.tiktok.com/@example/video/1234567890123456789", "-headers", "MissingColon"}, &stderr)
 	if err == nil {
 		t.Fatal("parseOptions() accepted a -headers value without a colon")
+	}
+}
+
+func TestRunPrintsVersionWithoutURL(t *testing.T) {
+	previous := buildVersion
+	previousFetcher := latestReleaseFetcher
+	buildVersion = "v1.2.3"
+	latestReleaseFetcher = func(context.Context) (string, error) { return "v1.2.3", nil }
+	t.Cleanup(func() {
+		buildVersion = previous
+		latestReleaseFetcher = previousFetcher
+	})
+
+	for _, argument := range []string{"-version", "--version"} {
+		t.Run(argument, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if err := run([]string{argument}, &stdout, &stderr); err != nil {
+				t.Fatalf("run(%q): %v", argument, err)
+			}
+			if got := stdout.String(); got != "tiktok_crawler v1.2.3\n"+cliDescription+"\n" {
+				t.Fatalf("stdout = %q", got)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("stderr = %q", stderr.String())
+			}
+		})
+	}
+}
+
+func TestPrintVersionWarnsWhenUpdateIsAvailable(t *testing.T) {
+	previous := buildVersion
+	previousFetcher := latestReleaseFetcher
+	buildVersion = "v1.1.5"
+	latestReleaseFetcher = func(context.Context) (string, error) { return "v1.1.6", nil }
+	t.Cleanup(func() {
+		buildVersion = previous
+		latestReleaseFetcher = previousFetcher
+	})
+
+	var stdout, stderr bytes.Buffer
+	if err := printVersion(&stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "v1.1.6 (current: v1.1.5)") || !strings.Contains(stderr.String(), projectLatestReleaseURL) {
+		t.Fatalf("update warning = %q", stderr.String())
+	}
+}
+
+func TestPrintVersionIgnoresFailedUpdateCheck(t *testing.T) {
+	previous := buildVersion
+	previousFetcher := latestReleaseFetcher
+	buildVersion = "v1.1.5"
+	latestReleaseFetcher = func(context.Context) (string, error) { return "", errors.New("offline") }
+	t.Cleanup(func() {
+		buildVersion = previous
+		latestReleaseFetcher = previousFetcher
+	})
+
+	var stdout, stderr bytes.Buffer
+	if err := printVersion(&stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "v1.1.5") || stderr.Len() != 0 {
+		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+}
+
+func TestNewerVersionAvailable(t *testing.T) {
+	tests := []struct {
+		current, latest string
+		want            bool
+	}{
+		{"v1.1.5", "v1.1.6", true},
+		{"1.1.5", "v1.1.6", true},
+		{"v1.1.6", "v1.1.6", false},
+		{"v1.2.0", "v1.1.6", false},
+		{"dev", "v1.1.6", false},
+	}
+	for _, test := range tests {
+		if got := newerVersionAvailable(test.current, test.latest); got != test.want {
+			t.Errorf("newerVersionAvailable(%q, %q) = %v, want %v", test.current, test.latest, got, test.want)
+		}
+	}
+}
+
+func TestFetchLatestReleaseFromGitHubResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Accept") != "application/vnd.github+json" || request.Header.Get("User-Agent") == "" {
+			t.Errorf("GitHub headers = %v", request.Header)
+		}
+		_, _ = writer.Write([]byte(`{"tag_name":"v1.2.3"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	got, err := fetchLatestReleaseFrom(context.Background(), server.Client(), server.URL)
+	if err != nil || got != "v1.2.3" {
+		t.Fatalf("fetchLatestReleaseFrom() = %q, %v", got, err)
 	}
 }
 
