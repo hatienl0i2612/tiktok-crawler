@@ -17,9 +17,6 @@ import (
 )
 
 func TestRunVideoJSONIntegration(t *testing.T) {
-	if os.Getenv("TIKTOK_VIDEO_INTEGRATION") != "1" {
-		t.Skip("set TIKTOK_VIDEO_INTEGRATION=1 to run against TikTok")
-	}
 	const inputURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
@@ -51,9 +48,6 @@ func TestRunVideoJSONIntegration(t *testing.T) {
 }
 
 func TestRunLiveJSONIntegration(t *testing.T) {
-	if os.Getenv("TIKTOK_LIVE_INTEGRATION") != "1" {
-		t.Skip("set TIKTOK_LIVE_INTEGRATION=1 to run against TikTok")
-	}
 	const inputURL = "https://www.tiktok.com/@weathernewslive/live"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-quality", "720p", "-json"}, &stdout, &stderr); err != nil {
@@ -106,10 +100,6 @@ func TestRunShortDramaJSONIntegration(t *testing.T) {
 }
 
 func TestRunPhotoPostJSONIntegration(t *testing.T) {
-	if os.Getenv("TIKTOK_PHOTO_INTEGRATION") != "1" {
-		t.Skip("set TIKTOK_PHOTO_INTEGRATION=1 to run against TikTok")
-	}
-
 	const inputURL = "https://www.tiktok.com/@5gvietteldv/photo/7666697358540852500"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
@@ -143,10 +133,6 @@ func TestRunPhotoPostJSONIntegration(t *testing.T) {
 }
 
 func TestRunProfileJSONIntegration(t *testing.T) {
-	if os.Getenv("TIKTOK_PROFILE_INTEGRATION") != "1" {
-		t.Skip("set TIKTOK_PROFILE_INTEGRATION=1 to run against TikTok")
-	}
-
 	const inputURL = "https://www.tiktok.com/@forever0404_"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
