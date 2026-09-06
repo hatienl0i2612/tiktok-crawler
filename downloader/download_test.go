@@ -79,6 +79,15 @@ func TestDownloadHelpers(t *testing.T) {
 	if looksLikeMedia("image", "text/html", []byte("<html>")) {
 		t.Fatal("HTML was recognized as image")
 	}
+	if !looksLikeMedia("audio", "audio/mpeg", nil) || !looksLikeMedia("audio", "application/octet-stream", []byte("ID3audio data")) {
+		t.Fatal("audio response was not recognized")
+	}
+	if !looksLikeMedia("audio", "application/octet-stream", []byte{0, 0, 0, 20, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}) {
+		t.Fatal("M4A audio response was not recognized")
+	}
+	if looksLikeMedia("audio", "text/html", []byte("<html>")) {
+		t.Fatal("HTML was recognized as audio")
+	}
 	if got := sanitizeFilenamePart("  bad///name...  "); got != "bad_name" {
 		t.Fatalf("sanitizeFilenamePart() = %q", got)
 	}

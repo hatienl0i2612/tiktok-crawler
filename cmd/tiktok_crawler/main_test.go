@@ -4,21 +4,79 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/hatienl0i2612/tiktok-crawler/downloader"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
+	"github.com/hatienl0i2612/tiktok-crawler/media"
 	"github.com/hatienl0i2612/tiktok-crawler/mpv"
+	"github.com/hatienl0i2612/tiktok-crawler/photo"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
+
+type cliRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function cliRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
 
 type failingWriter struct{ err error }
 
 func (writer failingWriter) Write([]byte) (int, error) { return 0, writer.err }
+
+func TestRunInteractiveRetriesAndWaitsAfterSuccess(t *testing.T) {
+	t.Parallel()
+	const validURL = "https://www.tiktok.com/@creator/video/1234567890123456789"
+	var calls [][]string
+	execute := func(args []string, stdout, _ io.Writer) error {
+		calls = append(calls, append([]string(nil), args...))
+		if args[0] != validURL {
+			return errors.New("unsupported URL")
+		}
+		_, _ = fmt.Fprintln(stdout, "/downloads/video.mp4")
+		return nil
+	}
+	var stdout, stderr bytes.Buffer
+	input := strings.NewReader("not-a-tiktok-url\n" + validURL + "\n\n")
+	if err := runInteractive(input, &stdout, &stderr, execute); err != nil {
+		t.Fatalf("runInteractive: %v", err)
+	}
+	if len(calls) != 2 || calls[0][0] != "not-a-tiktok-url" || calls[1][0] != validURL {
+		t.Fatalf("calls = %#v", calls)
+	}
+	if strings.Count(stdout.String(), "Paste a TikTok URL") != 2 || !strings.Contains(stdout.String(), "Press Enter to exit") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "Error: unsupported URL") {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+}
+
+func TestRunInteractiveAllowsEmptyInputToExit(t *testing.T) {
+	t.Parallel()
+	called := false
+	execute := func([]string, io.Writer, io.Writer) error {
+		called = true
+		return nil
+	}
+	var stdout, stderr bytes.Buffer
+	if err := runInteractive(strings.NewReader("\n"), &stdout, &stderr, execute); err != nil {
+		t.Fatalf("runInteractive: %v", err)
+	}
+	if called {
+		t.Fatal("interactive runner was called for empty input")
+	}
+}
 
 type fakeLivePlayer struct {
 	executable string
@@ -31,6 +89,71 @@ type fakeLivePlayer struct {
 func (player *fakeLivePlayer) Ensure(context.Context) (string, error) {
 	player.ensured = true
 	return player.executable, nil
+}
+
+func TestDownloadPhotoAlsoDownloadsMusic(t *testing.T) {
+	t.Parallel()
+	imagePayload := []byte{0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4}
+	audioPayload := []byte("ID3photo post music")
+	session, err := tiktok.NewSession(tiktok.SessionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session.HTTPClient().Transport = cliRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		payload, contentType := imagePayload, "image/jpeg"
+		if request.URL.Path == "/music.mp3" {
+			payload, contentType = audioPayload, "audio/mpeg"
+		} else if request.URL.Path != "/image.jpeg" {
+			return nil, errors.New("unexpected URL: " + request.URL.String())
+		}
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			Status:        "200 OK",
+			Header:        http.Header{"Content-Type": []string{contentType}},
+			Body:          io.NopCloser(bytes.NewReader(payload)),
+			ContentLength: int64(len(payload)),
+			Request:       request,
+		}, nil
+	})
+
+	outputDirectory := filepath.Join(t.TempDir(), "photo-post")
+	var stdout, stderr bytes.Buffer
+	err = downloadPhoto(context.Background(), session, downloader.FileInfo{
+		Author: "creator", VideoID: "123", Referer: "https://www.tiktok.com/@creator/photo/123",
+	}, []photo.Image{{Index: 1, Media: []media.Variant{{
+		Type: "image", Format: "jpeg", Quality: "1080p", URL: "https://v16.tiktokcdn.com/image.jpeg",
+	}}}}, video.Music{PlaybackURLs: []string{"https://v16.tiktokcdn.com/music.mp3"}}, options{
+		output: outputDirectory,
+	}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("downloadPhoto: %v", err)
+	}
+	paths := strings.Fields(stdout.String())
+	if len(paths) != 2 || paths[1] != filepath.Join(outputDirectory, "music.mp3") {
+		t.Fatalf("downloaded paths = %q", paths)
+	}
+	for index, expected := range [][]byte{imagePayload, audioPayload} {
+		payload, err := os.ReadFile(paths[index])
+		if err != nil || !bytes.Equal(payload, expected) {
+			t.Fatalf("download %d = %q, %v", index, payload, err)
+		}
+	}
+}
+
+func TestMusicFormat(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		url  string
+		want string
+	}{
+		{url: "https://v16.tiktokcdn.com/music.mp3?expires=1", want: "mp3"},
+		{url: "https://v16.tiktokcdn.com/music.mp4?expires=1", want: "m4a"},
+		{url: "https://v16.tiktokcdn.com/audio/playback?expires=1", want: "mp3"},
+	} {
+		if got := musicFormat(test.url); got != test.want {
+			t.Errorf("musicFormat(%q) = %q, want %q", test.url, got, test.want)
+		}
+	}
 }
 
 func (player *fakeLivePlayer) Play(_ context.Context, executable, streamURL string, options mpv.PlayOptions) error {

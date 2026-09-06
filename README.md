@@ -105,203 +105,41 @@ On Windows, open PowerShell in the download directory:
 
 Replace the example URLs with the TikTok video or LIVE room you want to process. The remaining examples use `go run` for source builds; when using a release, replace `go run ./cmd/tiktok_crawler` with the downloaded executable name shown above.
 
-## Videos
+## Supported URL types
 
-Download the best available video without a watermark (the default behavior):
+| Type | URL format | Default action |
+| --- | --- | --- |
+| Video | `https://www.tiktok.com/@username/video/<id>` | Download the video |
+| Photo Post / photo Story | `https://www.tiktok.com/@username/photo/<id>` | Download all photos and the post music when available |
+| Creator profile | `https://www.tiktok.com/@username` | Download the recent public videos exposed by TikTok |
+| Short Drama episode | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | Download the episode |
+| LIVE | `https://www.tiktok.com/@username/live` | Open the best available stream in mpv |
 
-```bash
-go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
+## CLI options
 
-TikTok also uses `/video/<id>` URLs for video Stories. When the player API omits a Story, the resolver reads TikTok's embed metadata and the page `playAddr` used by the web player; JSON output includes `"is_story": true`. The no-watermark `playAddr` is selected by default, while `-watermark` selects `downloadAddr`. No browser cookie is required for a public Story that is still available.
-
-Replace `example` and `1234567890123456789` with the username and video ID from the TikTok URL you want to crawl.
-
-Sample output for a video without a watermark:
-
-```text
-Downloading TikTok video
-  Author:  @example
-  Video:   1234567890123456789
-  Media:   No watermark | H.264 | 576p | 1024x576 | 23.74 MiB
-  Output:  /path/to/example_1234567890123456789_no_watermark_576p_h264.mp4
-  [=================>          ]  67.35%  15.99 MiB / 23.74 MiB  8.42 MiB/s  ETA 00:01
-  [============================] 100.00%  23.74 MiB / 23.74 MiB  7.92 MiB/s  ETA 00:00
-Completed: 23.74 MiB in 00:03 (7.91 MiB/s)
-/path/to/example_1234567890123456789_no_watermark_576p_h264.mp4
-```
-
-The default filename includes the username, video ID, watermark type, quality, and codec. Use `-output` to choose a destination:
+Usage:
 
 ```bash
-go run ./cmd/tiktok_crawler -output './video.mp4' 'https://www.tiktok.com/@example/video/1234567890123456789'
+tiktok_crawler [options] <TikTok URL>
 ```
 
-Download an exact video height:
+Options may appear before or after the URL.
 
-```bash
-go run ./cmd/tiktok_crawler \
-  -quality 1080p \
-  'https://www.tiktok.com/@example/video/1234567890123456789'
-```
+Run the executable without arguments—or double-click it on Windows—to enter interactive mode. Paste a TikTok URL when prompted; errors return to the prompt, and a successful run waits for Enter before closing.
 
-Print all normalized metadata and media profiles, including signed URLs, as JSON without downloading:
-
-```bash
-go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-TikTok's web player normally exposes playback profiles without a watermark. Some responses may also expose TikTok's official watermarked download address. Use `-watermark` to require that variant; the command returns an explicit error when TikTok does not provide it and never silently falls back to a no-watermark file.
-
-```bash
-go run ./cmd/tiktok_crawler -watermark 'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-Downloads are written to a temporary file and moved into place only after completion. Existing files are never overwritten; choose another `-output` path when necessary. Signed media URLs expire, so crawl the video again when an old URL stops working.
-
-## Creator profiles
-
-Print public user metadata and canonical links for the 10 most recent public videos exposed by TikTok's creator embed:
-
-```bash
-go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@forever0404_'
-```
-
-The JSON result includes `user`, `listing`, `video_urls`, and detailed `videos`. TikTok's main `/api/post/item_list/` pagination is protected by browser-generated `X-Dynosaur` and `X-Gnarly` signatures and can return an interactive captcha even when correctly signed. The crawler therefore uses the public server-rendered `/embed/@username` creator card, which reliably exposes the latest 10 public videos but not the creator's complete archive.
-
-Without `-json`, the crawler feeds each canonical URL back through the normal video resolver and downloads all returned videos. `-quality`, `-watermark`, and `-output` apply to the whole collection:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -quality 1080p \
-  -output "$HOME/Downloads/forever0404-videos" \
-  'https://www.tiktok.com/@forever0404_'
-```
-
-When `-output` is omitted, files are written to a new `<username>_videos/` directory. Each filename retains its TikTok video ID.
-
-## Photo Posts
-
-Download every image in a Photo Post in its original post order:
-
-```bash
-go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/photo/1234567890123456789'
-```
-
-TikTok also uses `/photo/<id>` URLs for photo Stories. When the player API omits a Story, the resolver automatically reads TikTok's embed metadata instead; JSON output includes `"is_story": true`. No browser cookie is required for a public Story that is still available.
-
-Replace `example` and `1234567890123456789` with the username and Photo Post ID from the URL you want to crawl. By default, the images are stored in a new `<username>_<photo-id>_images/` directory in the current working directory. Use `-output` to choose the output directory; it is created when necessary:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -output '~/Downloads/tiktok-photo-post' \
-  'https://www.tiktok.com/@example/photo/1234567890123456789'
-```
-
-Use `-json` to print the post metadata, signed image URLs, and signed audio playback URLs when TikTok exposes them, without downloading. `-quality` is ignored for Photo Posts because TikTok exposes one display image per post image. Some Photo Posts may expose official watermark image sources; `-watermark` requires those sources and returns an error instead of silently downloading the no-watermark image when they are absent.
-
-## Short Drama episodes
-
-Short Drama episode URLs use the same video download options and download by default:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -cookies-from-browser chrome \
-  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
-```
-
-Or load the cookies from a `.txt` file:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -cookies-file ./cookies.txt \
-  'https://www.tiktok.com/shortdrama/episode/7665073849083368469/1'
-```
-
-TikTok exposes episode metadata publicly but currently requires a valid browser `msToken` for the signed playback-metadata request. Provide your own TikTok cookie with `-cookies-from-browser` or `-cookies-file`; the tool generates `X-Bogus` locally and never writes the cookie to disk. `-json`, `-output`, and `-quality` work the same way as for regular videos.
-
-## Livestreams
-
-Resolve a LIVE room, select its best stream, and open it in mpv:
-
-```bash
-go run ./cmd/tiktok_crawler 'https://www.tiktok.com/@example/live'
-```
-
-Replace `example` with the TikTok username of the LIVE channel you want to watch. The normal LIVE command no longer prints signed URLs. It prefers `origin`, then the best remaining quality; equal-quality streams prefer H.264, the main CDN line, and HLS.
-
-The first run looks for `mpv` in `PATH`. If it is absent, the CLI downloads and caches a portable build under `os.TempDir()/tiktok-crawler/mpv/<os>-<arch>`:
-
-| Platform | Portable source |
+| Option | Description |
 | --- | --- |
-| Windows `amd64`, `arm64`, `386` | First-party stable ZIP from `mpv-player/mpv` |
-| macOS `arm64`, `amd64` | First-party stable ZIP from `mpv-player/mpv` |
-| Linux `amd64`, `arm64` | AppImage from `pkgforge-dev/mpv-AppImage` |
-
-Every downloaded artifact is limited in size and verified against the SHA-256 digest in GitHub release metadata before extraction or execution. The OS temporary directory is selected with Go's `os.TempDir`, so its concrete location follows the host operating system. A later run reuses either the system mpv or the cached portable executable.
-
-Sample status for an active LIVE room:
-
-```text
-Opening TikTok LIVE @example in mpv (origin, h264, hls)
-```
-
-To inspect all room metadata and stream URLs without launching mpv, use JSON mode:
-
-```bash
-go run ./cmd/tiktok_crawler -json 'https://www.tiktok.com/@example/live'
-```
-
-## Authentication and regional restrictions
-
-Public videos and live rooms usually work without authentication. If TikTok requires login, age verification, or a specific region, provide your own cookies from a logged-in browser or a cookie file:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -cookies-from-browser chrome \
-  'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-Do not commit cookies to source control. Each client keeps cookies received from TikTok pages and reuses them for related requests.
-
-### Cookies from a browser
-
-Instead of pasting a cookie manually, read it from a browser that is already logged in to TikTok:
-
-Instead of pasting a cookie manually, read it from a browser that is already logged in to TikTok:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -cookies-from-browser chrome \
-  'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-Supported browser names follow the `browsercookie` library: brave, chrome, chromium, vivaldi, edge, edge-dev, arc, opera, opera-gx, firefox, librewolf, zen, safari. Only cookies belonging to TikTok hosts are read, and they are sent on every request. On macOS, the terminal may need Full Disk Access to read a browser's cookie store; Safari and some Chromium browsers also require the browser to be integrated with the macOS keychain.
-
-### Cookies from a file
-
-Pass a path to a cookies `.txt` file with `-cookies-file`. The file may be either a raw Cookie header value (`ttwid=...; sessionid=...`) or a Netscape cookie-jar export:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -cookies-file ./cookies.txt \
-  'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-Cookies loaded from the file are sent on every request. Explicit `-cookies-file` takes precedence over `-cookies-from-browser`. Do not commit cookie files to source control.
-
-### Custom headers
-
-Add extra HTTP headers to every request with `-headers`. Repeat the flag, one `Key: Value` pair per occurrence:
-
-```bash
-go run ./cmd/tiktok_crawler \
-  -headers 'User-Agent: Mozilla/5.0 ...' \
-  -headers 'X-Forwarded-For: 1.2.3.4' \
-  'https://www.tiktok.com/@example/video/1234567890123456789'
-```
-
-Custom headers override the tool's defaults (`User-Agent`, `Accept-Language`, `Cache-Control`, `Accept`). To send a specific browser signature, set `User-Agent` through `-headers` (the tool's default is otherwise used). A `Referer` or `Cookie` key is superseded by the request-specific values the crawler computes.
+| `-json` | Print resolved metadata as JSON instead of downloading or playing |
+| `-output <path>` | Set the output file or directory; ignored for LIVE URLs |
+| `-quality <height>` | Select video quality, such as `720p` or `1080p`; default is `best` |
+| `-watermark` | Download TikTok's official watermarked video or image variant |
+| `-verbose` | Print a summary for LIVE rooms |
+| `-timeout <duration>` | Set the LIVE request timeout; default is `20s` |
+| `-cookies-file <path>` | Load TikTok cookies from a Netscape cookie file or raw Cookie header |
+| `-cookies-from-browser <browser>` | Load TikTok cookies from an installed browser |
+| `-headers 'Key: Value'` | Add an HTTP header; repeat the option to add multiple headers |
+| `-version` | Print the CLI version |
+| `-help` | Print command help |
 
 ## Build
 

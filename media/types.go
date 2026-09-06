@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Variant is one downloadable TikTok video or image representation.
+// Variant is one downloadable TikTok video, image, or audio representation.
 type Variant struct {
 	Type        string     `json:"type"`
 	Kind        string     `json:"kind"`

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime/debug"
 	"strconv"
@@ -26,6 +29,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 	"github.com/hatienl0i2612/tiktok-crawler/video"
+	"github.com/mattn/go-isatty"
 	"golang.org/x/mod/semver"
 )
 
@@ -77,9 +81,65 @@ type options struct {
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	args := os.Args[1:]
+	var err error
+	if len(args) == 0 && isInteractiveTerminal(os.Stdin) {
+		err = runInteractive(os.Stdin, os.Stdout, os.Stderr, run)
+	} else {
+		err = run(args, os.Stdout, os.Stderr)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
+	}
+}
+
+type interactiveRunner func([]string, io.Writer, io.Writer) error
+
+func isInteractiveTerminal(input *os.File) bool {
+	if input == nil {
+		return false
+	}
+	fileDescriptor := input.Fd()
+	return isatty.IsTerminal(fileDescriptor) || isatty.IsCygwinTerminal(fileDescriptor)
+}
+
+func runInteractive(input io.Reader, stdout, stderr io.Writer, execute interactiveRunner) error {
+	reader := bufio.NewReader(input)
+	if _, err := fmt.Fprintln(stdout, "TikTok Crawler interactive mode"); err != nil {
+		return err
+	}
+	for {
+		if _, err := fmt.Fprint(stdout, "\nPaste a TikTok URL (leave empty to exit): "); err != nil {
+			return err
+		}
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return fmt.Errorf("read TikTok URL: %w", readErr)
+		}
+		inputURL := strings.TrimSpace(line)
+		if inputURL == "" {
+			return nil
+		}
+		if _, err := fmt.Fprintln(stdout); err != nil {
+			return err
+		}
+		if err := execute([]string{inputURL}, stdout, stderr); err != nil {
+			if _, writeErr := fmt.Fprintln(stderr, "Error:", err); writeErr != nil {
+				return writeErr
+			}
+			if errors.Is(readErr, io.EOF) {
+				return nil
+			}
+			continue
+		}
+		if _, err := fmt.Fprint(stdout, "\nPress Enter to exit..."); err != nil {
+			return err
+		}
+		if _, err := reader.ReadString('\n'); err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("wait before exit: %w", err)
+		}
+		return nil
 	}
 }
 
@@ -434,7 +494,7 @@ func runPhoto(options options, cookie string, stdout, stderr io.Writer) error {
 		Author:  result.Post.Author.UniqueID,
 		VideoID: result.Post.ID,
 		Referer: result.FinalURL,
-	}, result.Images, options, stdout, stderr)
+	}, result.Images, result.Post.Music, options, stdout, stderr)
 }
 
 func runProfile(options options, cookie string, stdout, stderr io.Writer) error {
@@ -542,6 +602,7 @@ func downloadPhoto(
 	session *tiktok.Session,
 	file downloader.FileInfo,
 	images []photo.Image,
+	music video.Music,
 	options options,
 	stdout io.Writer,
 	stderr io.Writer,
@@ -566,12 +627,61 @@ func downloadPhoto(
 		return err
 	}
 	progress.completeBatch(downloads.Downloads)
-	for _, download := range downloads.Downloads {
+	allDownloads := downloads.Downloads
+	if musicMedia := makeMusicMedia(music.PlaybackURLs); len(musicMedia) > 0 {
+		outputDirectory := filepath.Dir(downloads.Downloads[0].Path)
+		musicDownload, err := downloader.Download(ctx, session, musicMedia, file, downloader.Options{
+			OutputPath: filepath.Join(outputDirectory, "music."+musicMedia[0].Format),
+			Progress:   progress.update,
+			OnStart: func(start downloader.DownloadStart) {
+				progress.startMusic(file.Author, file.VideoID, start.Media, start.OutputPath)
+			},
+		})
+		if err != nil {
+			progress.stop()
+			return fmt.Errorf("download Photo Post music: %w", err)
+		}
+		progress.complete(musicDownload)
+		allDownloads = append(allDownloads, *musicDownload)
+	}
+	for _, download := range allDownloads {
 		if _, err := fmt.Fprintln(stdout, download.Path); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func makeMusicMedia(playbackURLs []string) []media.Variant {
+	playbackURLs = media.UniqueStrings(playbackURLs)
+	if len(playbackURLs) == 0 {
+		return nil
+	}
+	format := musicFormat(playbackURLs[0])
+	return []media.Variant{{
+		Type:       "audio",
+		Kind:       "music",
+		Codec:      format,
+		Format:     format,
+		Quality:    "original",
+		URL:        playbackURLs[0],
+		BackupURLs: playbackURLs[1:],
+	}}
+}
+
+func musicFormat(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err == nil {
+		switch strings.ToLower(strings.TrimPrefix(filepath.Ext(parsed.Path), ".")) {
+		case "mp3":
+			return "mp3"
+		case "m4a", "mp4":
+			return "m4a"
+		case "aac", "ogg", "opus", "wav", "flac":
+			return strings.ToLower(strings.TrimPrefix(filepath.Ext(parsed.Path), "."))
+		}
+	}
+	return "mp3"
 }
 
 func runLive(options options, cookie string, stdout, stderr io.Writer) error {
@@ -655,6 +765,10 @@ func (display *progressDisplay) startImage(index, total int, username, photoID s
 	display.startAsset(fmt.Sprintf("Downloading TikTok image %d/%d", index, total), "Photo", "Image", username, photoID, variant, outputPath)
 }
 
+func (display *progressDisplay) startMusic(username, photoID string, variant *media.Variant, outputPath string) {
+	display.startAsset("Downloading TikTok Photo Post music", "Photo", "Audio", username, photoID, variant, outputPath)
+}
+
 func (display *progressDisplay) startProfileVideo(index, total int, username, videoID string, variant *media.Variant, outputPath string) {
 	display.startAsset(fmt.Sprintf("Downloading TikTok profile video %d/%d", index, total), "Video", "Media", username, videoID, variant, outputPath)
 }
@@ -664,15 +778,19 @@ func (display *progressDisplay) startAsset(title, idLabel, mediaLabel, username,
 	if username == "" {
 		username = "unknown"
 	}
-	watermark := "No watermark"
-	if variant.Watermarked {
-		watermark = "TikTok watermark"
+	details := make([]string, 0, 4)
+	if !strings.EqualFold(variant.Type, "audio") {
+		watermark := "No watermark"
+		if variant.Watermarked {
+			watermark = "TikTok watermark"
+		}
+		details = append(details, watermark)
 	}
 	codec := displayCodec(variant.Codec)
 	if strings.EqualFold(variant.Type, "image") && variant.Format != "" {
 		codec = strings.ToUpper(variant.Format)
 	}
-	details := []string{watermark, codec, variant.Quality}
+	details = append(details, codec, variant.Quality)
 	if variant.Width > 0 && variant.Height > 0 {
 		details = append(details, fmt.Sprintf("%dx%d", variant.Width, variant.Height))
 	}

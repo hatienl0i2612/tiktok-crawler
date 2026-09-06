@@ -199,7 +199,7 @@ func downloadURL(
 	if err != nil || parsed.Scheme != "https" || !tiktok.IsAllowedHost(parsed.Hostname()) {
 		return nil, fmt.Errorf("refuse disallowed media URL: %s", redactURL(mediaURL))
 	}
-	response, err := session.Get(ctx, parsed.String(), "video/mp4,video/*;q=0.9,image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.7", options.Referer)
+	response, err := session.Get(ctx, parsed.String(), "video/mp4,video/*;q=0.9,audio/*;q=0.9,image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.7", options.Referer)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", parsed.Hostname(), err)
 	}
@@ -384,17 +384,31 @@ func resolveOutputPath(outputPath string) (string, error) {
 
 func looksLikeMedia(variantType, contentType string, header []byte) bool {
 	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
-	if strings.EqualFold(strings.TrimSpace(variantType), "image") {
+	switch strings.ToLower(strings.TrimSpace(variantType)) {
+	case "image":
 		return strings.HasPrefix(mediaType, "image/") || looksLikeImage(header)
+	case "audio":
+		return strings.HasPrefix(mediaType, "audio/") || looksLikeAudio(header)
 	}
 	return strings.HasPrefix(mediaType, "video/") || len(header) >= 8 && bytes.Equal(header[4:8], []byte("ftyp"))
 }
 
 func expectedMediaType(variantType string) string {
-	if strings.EqualFold(strings.TrimSpace(variantType), "image") {
+	switch strings.ToLower(strings.TrimSpace(variantType)) {
+	case "image":
 		return "image"
+	case "audio":
+		return "audio"
 	}
 	return "video"
+}
+
+func looksLikeAudio(header []byte) bool {
+	return len(header) >= 3 && bytes.Equal(header[:3], []byte("ID3")) ||
+		len(header) >= 2 && header[0] == 0xff && header[1]&0xe0 == 0xe0 ||
+		len(header) >= 4 && bytes.Equal(header[:4], []byte("OggS")) ||
+		len(header) >= 4 && bytes.Equal(header[:4], []byte("fLaC")) ||
+		len(header) >= 12 && bytes.Equal(header[4:8], []byte("ftyp"))
 }
 
 func looksLikeImage(header []byte) bool {

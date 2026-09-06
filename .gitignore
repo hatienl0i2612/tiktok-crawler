@@ -3,5 +3,10 @@
 tmp
 temp
 *.mp4
+*.jpeg
+*.jpg
+*.png
+*.mp3
+*.mov
 .codegraph
 .DS_Store
