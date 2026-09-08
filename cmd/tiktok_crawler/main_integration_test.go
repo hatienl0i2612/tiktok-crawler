@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hatienl0i2612/tiktok-crawler/hashtag"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/profile"
@@ -16,7 +17,18 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/video"
 )
 
+const tiktokIntegrationEnvironment = "TIKTOK_INTEGRATION"
+
+func requireTikTokIntegration(t *testing.T) {
+	t.Helper()
+	if os.Getenv(tiktokIntegrationEnvironment) != "1" {
+		t.Skipf("set %s=1 to run against TikTok", tiktokIntegrationEnvironment)
+	}
+}
+
 func TestRunVideoJSONIntegration(t *testing.T) {
+	requireTikTokIntegration(t)
+
 	const inputURL = "https://www.tiktok.com/@forever0404_/video/7671176369300327700"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
@@ -48,6 +60,8 @@ func TestRunVideoJSONIntegration(t *testing.T) {
 }
 
 func TestRunLiveJSONIntegration(t *testing.T) {
+	requireTikTokIntegration(t)
+
 	const inputURL = "https://www.tiktok.com/@weathernewslive/live"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-quality", "720p", "-json"}, &stdout, &stderr); err != nil {
@@ -100,6 +114,8 @@ func TestRunShortDramaJSONIntegration(t *testing.T) {
 }
 
 func TestRunPhotoPostJSONIntegration(t *testing.T) {
+	requireTikTokIntegration(t)
+
 	const inputURL = "https://www.tiktok.com/@5gvietteldv/photo/7666697358540852500"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
@@ -133,6 +149,8 @@ func TestRunPhotoPostJSONIntegration(t *testing.T) {
 }
 
 func TestRunProfileJSONIntegration(t *testing.T) {
+	requireTikTokIntegration(t)
+
 	const inputURL = "https://www.tiktok.com/@forever0404_"
 	var stdout, stderr bytes.Buffer
 	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
@@ -152,6 +170,32 @@ func TestRunProfileJSONIntegration(t *testing.T) {
 		parsed, err := url.Parse(videoURL)
 		if err != nil || parsed.Scheme != "https" || !strings.Contains(parsed.Path, "/@forever0404_/video/") {
 			t.Fatalf("invalid profile video URL %q: %v", videoURL, err)
+		}
+	}
+}
+
+func TestRunHashtagJSONIntegration(t *testing.T) {
+	requireTikTokIntegration(t)
+
+	const inputURL = "https://www.tiktok.com/tag/chatgpt"
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{inputURL, "-json"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run -json %s: %v", inputURL, err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	var result hashtag.Result
+	if err := json.NewDecoder(&stdout).Decode(&result); err != nil {
+		t.Fatalf("decode JSON output: %v\noutput: %s", err, stdout.String())
+	}
+	if !strings.EqualFold(result.Hashtag.Name, "chatgpt") || result.Hashtag.ID == "" || len(result.VideoURLs) == 0 || len(result.Videos) != len(result.VideoURLs) {
+		t.Fatalf("unexpected hashtag result: %+v", result)
+	}
+	for _, videoURL := range result.VideoURLs {
+		parsed, err := url.Parse(videoURL)
+		if err != nil || parsed.Scheme != "https" || !strings.Contains(parsed.Path, "/video/") {
+			t.Fatalf("invalid hashtag video URL %q: %v", videoURL, err)
 		}
 	}
 }

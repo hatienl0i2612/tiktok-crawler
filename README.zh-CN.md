@@ -6,8 +6,8 @@
 
 本仓库包含一个 Go 库和一个命令行工具：
 
-- **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、创作者主页、图文帖、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
-- **CLI**：`tiktok_crawler` 自动识别 URL 类型，抓取公开创作者主页，下载公开 TikTok 视频、图文帖和短剧剧集，并使用 mpv 打开最佳公开 TikTok LIVE 播放流。
+- **库**：可通过 `github.com/hatienl0i2612/tiktok-crawler` 导入的包，用于解析视频、创作者主页、话题标签页、图文帖、短剧剧集和 LIVE 直播间，并提供 cookie、media 和下载辅助函数。
+- **CLI**：`tiktok_crawler` 自动识别 URL 类型，抓取公开创作者主页和话题标签，下载对应的公开视频、图文帖和短剧剧集，并使用 mpv 打开最佳公开 TikTok LIVE 播放流。
 
 该工具使用 Go 标准库，并通过 `browsercookie` 包可选地从已安装的浏览器中导入 cookie。
 
@@ -25,7 +25,7 @@ client, err := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-也可直接使用子包：`video`、`profile`、`photo`、`livestream`、`mpv`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
+也可直接使用子包：`video`、`profile`、`hashtag`、`photo`、`livestream`、`mpv`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
 
 ## 下载发行版
 
@@ -72,6 +72,7 @@ chmod +x tiktok_crawler-darwin-arm64
 | 视频 | `https://www.tiktok.com/@username/video/<id>` | 下载视频 |
 | 图文帖 / 图片 Story | `https://www.tiktok.com/@username/photo/<id>` | 下载全部图片，并在可用时下载帖子音乐 |
 | 创作者主页 | `https://www.tiktok.com/@username` | 下载 TikTok 提供的近期公开视频 |
+| 话题标签 | `https://www.tiktok.com/tag/<name>` | 下载 TikTok 标签嵌入页提供的公开视频 |
 | 短剧剧集 | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | 下载该剧集 |
 | LIVE 直播 | `https://www.tiktok.com/@username/live` | 使用 mpv 打开最佳可用直播流 |
 

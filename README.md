@@ -6,8 +6,8 @@ English | [Tiếng Việt](README.vi.md) | [简体中文](README.zh-CN.md)
 
 This repository contains a Go library plus a command-line tool:
 
-- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, creator profiles, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
-- **CLI**: `tiktok_crawler` detects the URL type, crawls public creator profiles, downloads public TikTok videos, Photo Posts, and Short Drama episodes, and opens the best public TikTok LIVE stream in mpv.
+- **Library**: importable packages under `github.com/hatienl0i2612/tiktok-crawler` for resolving videos, creator profiles, hashtag pages, Photo Posts, Short Drama episodes, and LIVE rooms, plus helpers for cookies, media, and downloads.
+- **CLI**: `tiktok_crawler` detects the URL type, crawls public creator profiles and hashtags, downloads their public TikTok videos, Photo Posts, and Short Drama episodes, and opens the best public TikTok LIVE stream in mpv.
 
 The code uses the Go standard library, plus the `browsercookie` package to optionally import cookies from an installed browser.
 
@@ -56,6 +56,7 @@ For more focused control, use the subpackages directly:
 import (
 	"github.com/hatienl0i2612/tiktok-crawler/video"       // video.Result, video.Video, ...
 	"github.com/hatienl0i2612/tiktok-crawler/profile"     // profile.Result, profile.User, ...
+	"github.com/hatienl0i2612/tiktok-crawler/hashtag"     // hashtag.Result, hashtag.Hashtag, ...
 	"github.com/hatienl0i2612/tiktok-crawler/photo"       // photo.Result, photo.Image, ...
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
 	"github.com/hatienl0i2612/tiktok-crawler/mpv"         // portable mpv discovery, install, and playback
@@ -112,6 +113,7 @@ Replace the example URLs with the TikTok video or LIVE room you want to process.
 | Video | `https://www.tiktok.com/@username/video/<id>` | Download the video |
 | Photo Post / photo Story | `https://www.tiktok.com/@username/photo/<id>` | Download all photos and the post music when available |
 | Creator profile | `https://www.tiktok.com/@username` | Download the recent public videos exposed by TikTok |
+| Hashtag | `https://www.tiktok.com/tag/<name>` | Download the public videos exposed by TikTok's tag embed |
 | Short Drama episode | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | Download the episode |
 | LIVE | `https://www.tiktok.com/@username/live` | Open the best available stream in mpv |
 

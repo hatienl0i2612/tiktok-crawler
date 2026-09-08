@@ -1,6 +1,6 @@
 // Package tiktokcrawler is the high-level entry point for the TikTok Crawler
 // library. It detects the kind of a TikTok URL and resolves it through the
-// specialized video, photo, profile, livestream, or shortdrama clients.
+// specialized video, photo, profile, hashtag, livestream, or shortdrama clients.
 //
 // # Quick start
 //
@@ -18,7 +18,7 @@
 //	}
 //
 // For more focused control, import the subpackages directly (video, photo,
-// profile, livestream, shortdrama, cookies, downloader).
+// profile, hashtag, livestream, shortdrama, cookies, downloader).
 package tiktokcrawler
 
 import (
@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/hatienl0i2612/tiktok-crawler/hashtag"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/photo"
 	"github.com/hatienl0i2612/tiktok-crawler/profile"
@@ -41,6 +42,7 @@ var (
 	photoPathPattern      = regexp.MustCompile(`^/@[^/]+/photo/[0-9]+/?$`)
 	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
 	profilePathPattern    = regexp.MustCompile(`^/@[^/]+/?$`)
+	hashtagPathPattern    = regexp.MustCompile(`^/tag/[^/]+/?$`)
 )
 
 // Kind describes the type of a TikTok content URL.
@@ -57,6 +59,8 @@ const (
 	KindShortDrama Kind = "shortdrama"
 	// KindProfile is a public TikTok creator profile under an /@username URL.
 	KindProfile Kind = "profile"
+	// KindHashtag is a public TikTok hashtag page under a /tag/<name> URL.
+	KindHashtag Kind = "hashtag"
 )
 
 // DetectKind validates a TikTok URL and returns its content kind. It returns
@@ -77,8 +81,10 @@ func DetectKind(rawURL string) (Kind, error) {
 		return KindShortDrama, nil
 	case profilePathPattern.MatchString(parsed.EscapedPath()):
 		return KindProfile, nil
+	case hashtagPathPattern.MatchString(parsed.EscapedPath()):
+		return KindHashtag, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, profile, Short Drama episode, or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, profile, hashtag, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
 }
 
@@ -93,6 +99,7 @@ type Client struct {
 	video      *video.Client
 	photo      *photo.Client
 	profile    *profile.Client
+	hashtag    *hashtag.Client
 	livestream *livestream.Client
 	shortdrama *shortdrama.Client
 }
@@ -112,6 +119,10 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	hashtagClient, err := hashtag.NewClient(hashtag.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
+	if err != nil {
+		return nil, err
+	}
 	liveClient, err := livestream.NewClient(livestream.ClientOptions{Cookie: options.Cookie, Headers: options.Headers})
 	if err != nil {
 		return nil, err
@@ -120,7 +131,7 @@ func NewClient(options ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{video: videoClient, photo: photoClient, profile: profileClient, livestream: liveClient, shortdrama: dramaClient}, nil
+	return &Client{video: videoClient, photo: photoClient, profile: profileClient, hashtag: hashtagClient, livestream: liveClient, shortdrama: dramaClient}, nil
 }
 
 // Video returns the underlying video client for focused resolution or download.
@@ -131,6 +142,9 @@ func (client *Client) Photo() *photo.Client { return client.photo }
 
 // Profile returns the underlying creator profile client.
 func (client *Client) Profile() *profile.Client { return client.profile }
+
+// Hashtag returns the underlying hashtag client.
+func (client *Client) Hashtag() *hashtag.Client { return client.hashtag }
 
 // Livestream returns the underlying livestream client for focused resolution.
 func (client *Client) Livestream() *livestream.Client { return client.livestream }
@@ -144,6 +158,7 @@ type Result struct {
 	Video      *video.Result
 	Photo      *photo.Result
 	Profile    *profile.Result
+	Hashtag    *hashtag.Result
 	Livestream *livestream.Result
 	ShortDrama *shortdrama.Result
 }
@@ -173,6 +188,12 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 			return nil, err
 		}
 		return &Result{Kind: KindProfile, Profile: result}, nil
+	case KindHashtag:
+		result, err := client.hashtag.Resolve(ctx, rawURL)
+		if err != nil {
+			return nil, err
+		}
+		return &Result{Kind: KindHashtag, Hashtag: result}, nil
 	case KindLive:
 		result, err := client.livestream.Resolve(ctx, rawURL)
 		if err != nil {

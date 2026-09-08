@@ -369,25 +369,3 @@ func TestResolverHelpers(t *testing.T) {
 		t.Fatalf("uniqueStrings() = %v", values)
 	}
 }
-
-func TestFlexibleInt64(t *testing.T) {
-	t.Parallel()
-
-	for _, input := range []string{`123`, `"123"`} {
-		var value flexibleInt64
-		if err := json.Unmarshal([]byte(input), &value); err != nil {
-			t.Fatalf("unmarshal %s: %v", input, err)
-		}
-		if value != 123 {
-			t.Fatalf("value = %d, want 123", value)
-		}
-	}
-	var nullValue flexibleInt64 = 9
-	if err := json.Unmarshal([]byte(`null`), &nullValue); err != nil || nullValue != 0 {
-		t.Fatalf("unmarshal null = %d, %v", nullValue, err)
-	}
-	var invalid flexibleInt64
-	if err := json.Unmarshal([]byte(`"abc"`), &invalid); err == nil {
-		t.Fatal("invalid flexible integer unexpectedly succeeded")
-	}
-}

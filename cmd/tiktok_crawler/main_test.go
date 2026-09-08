@@ -172,6 +172,7 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 	const liveURL = "https://www.tiktok.com/@weathernewslive/live"
 	const shortDramaURL = "https://www.tiktok.com/shortdrama/episode/7665073849083368469/1"
 	const profileURL = "https://www.tiktok.com/@forever0404_"
+	const hashtagURL = "https://www.tiktok.com/tag/chatgpt"
 	tests := []struct {
 		name string
 		args []string
@@ -216,6 +217,11 @@ func TestParseOptionsDetectsVideoAndLiveURLs(t *testing.T) {
 			name: "profile uses video options and an output directory",
 			args: []string{profileURL, "-quality", "1080p", "-output", "videos", "-watermark"},
 			want: options{inputURL: profileURL, content: contentTypeProfile, output: "videos", quality: "1080p", watermark: true, timeout: 20 * time.Second},
+		},
+		{
+			name: "hashtag uses video options and an output directory",
+			args: []string{hashtagURL, "-quality", "720p", "-output", "tag-videos", "-watermark"},
+			want: options{inputURL: hashtagURL, content: contentTypeHashtag, output: "tag-videos", quality: "720p", watermark: true, timeout: 20 * time.Second},
 		},
 		{
 			name: "repeated headers flag",
@@ -355,6 +361,8 @@ func TestDetectContentType(t *testing.T) {
 		{"https://www.tiktok.com/shortdrama/episode/7665073849083368469/1", contentTypeShortDrama, false},
 		{"https://www.tiktok.com/@example", contentTypeProfile, false},
 		{"https://www.tiktok.com/@example/", contentTypeProfile, false},
+		{"https://www.tiktok.com/tag/chatgpt", contentTypeHashtag, false},
+		{"https://www.tiktok.com/tag/ChatGPT/", contentTypeHashtag, false},
 		{"https://example.com/@example/live", "", true},
 		{"https://www.tiktok.com/explore", "", true},
 	}
@@ -375,6 +383,12 @@ func TestDetectContentType(t *testing.T) {
 func TestDefaultProfileOutputDirectory(t *testing.T) {
 	if got := defaultProfileOutputDirectory("forever0404_"); got != "forever0404_videos" {
 		t.Fatalf("defaultProfileOutputDirectory() = %q", got)
+	}
+}
+
+func TestDefaultHashtagOutputDirectory(t *testing.T) {
+	if got := defaultHashtagOutputDirectory("chatgpt"); got != "chatgpt_videos" {
+		t.Fatalf("defaultHashtagOutputDirectory() = %q", got)
 	}
 }
 

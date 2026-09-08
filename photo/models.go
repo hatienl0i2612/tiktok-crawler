@@ -1,9 +1,9 @@
 package photo
 
 import (
-	"bytes"
 	"encoding/json"
-	"strconv"
+
+	"github.com/hatienl0i2612/tiktok-crawler/internal/jsonvalue"
 )
 
 type playerResponse struct {
@@ -110,11 +110,11 @@ type embedAuthor struct {
 }
 
 type embedAuthorStatistics struct {
-	FollowingCount flexibleInt64 `json:"followingCount"`
-	FollowerCount  flexibleInt64 `json:"followerCount"`
-	HeartCount     flexibleInt64 `json:"heartCount"`
-	VideoCount     flexibleInt64 `json:"videoCount"`
-	DiggCount      flexibleInt64 `json:"diggCount"`
+	FollowingCount jsonvalue.Int64 `json:"followingCount"`
+	FollowerCount  jsonvalue.Int64 `json:"followerCount"`
+	HeartCount     jsonvalue.Int64 `json:"heartCount"`
+	VideoCount     jsonvalue.Int64 `json:"videoCount"`
+	DiggCount      jsonvalue.Int64 `json:"diggCount"`
 }
 
 type embedMusic struct {
@@ -135,32 +135,4 @@ type embedImage struct {
 	Height  int      `json:"height"`
 	Width   int      `json:"width"`
 	URLList []string `json:"urlList"`
-}
-
-type flexibleInt64 int64
-
-func (value *flexibleInt64) UnmarshalJSON(data []byte) error {
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
-		*value = 0
-		return nil
-	}
-	if data[0] == '"' {
-		var text string
-		if err := json.Unmarshal(data, &text); err != nil {
-			return err
-		}
-		parsed, err := strconv.ParseInt(text, 10, 64)
-		if err != nil {
-			return err
-		}
-		*value = flexibleInt64(parsed)
-		return nil
-	}
-	parsed, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return err
-	}
-	*value = flexibleInt64(parsed)
-	return nil
 }

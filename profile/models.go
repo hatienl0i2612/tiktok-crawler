@@ -1,10 +1,6 @@
 package profile
 
-import (
-	"bytes"
-	"encoding/json"
-	"strconv"
-)
+import "github.com/hatienl0i2612/tiktok-crawler/internal/jsonvalue"
 
 type hydrationState struct {
 	DefaultScope struct {
@@ -41,12 +37,12 @@ type hydrationUser struct {
 }
 
 type hydrationStatistics struct {
-	FollowingCount flexibleInt64 `json:"followingCount"`
-	FollowerCount  flexibleInt64 `json:"followerCount"`
-	HeartCount     flexibleInt64 `json:"heartCount"`
-	VideoCount     flexibleInt64 `json:"videoCount"`
-	DiggCount      flexibleInt64 `json:"diggCount"`
-	FriendCount    flexibleInt64 `json:"friendCount"`
+	FollowingCount jsonvalue.Int64 `json:"followingCount"`
+	FollowerCount  jsonvalue.Int64 `json:"followerCount"`
+	HeartCount     jsonvalue.Int64 `json:"heartCount"`
+	VideoCount     jsonvalue.Int64 `json:"videoCount"`
+	DiggCount      jsonvalue.Int64 `json:"diggCount"`
+	FriendCount    jsonvalue.Int64 `json:"friendCount"`
 }
 
 type embedState struct {
@@ -65,58 +61,30 @@ type embedPage struct {
 }
 
 type embedUser struct {
-	ID             string        `json:"id"`
-	UniqueID       string        `json:"uniqueId"`
-	Nickname       string        `json:"nickname"`
-	Signature      string        `json:"signature"`
-	Verified       bool          `json:"verified"`
-	PrivateAccount bool          `json:"privateAccount"`
-	AvatarThumbURL string        `json:"avatarThumbUrl"`
-	FollowingCount flexibleInt64 `json:"followingCount"`
-	FollowerCount  flexibleInt64 `json:"followerCount"`
-	HeartCount     flexibleInt64 `json:"heartCount"`
-	Code           int           `json:"code"`
+	ID             string          `json:"id"`
+	UniqueID       string          `json:"uniqueId"`
+	Nickname       string          `json:"nickname"`
+	Signature      string          `json:"signature"`
+	Verified       bool            `json:"verified"`
+	PrivateAccount bool            `json:"privateAccount"`
+	AvatarThumbURL string          `json:"avatarThumbUrl"`
+	FollowingCount jsonvalue.Int64 `json:"followingCount"`
+	FollowerCount  jsonvalue.Int64 `json:"followerCount"`
+	HeartCount     jsonvalue.Int64 `json:"heartCount"`
+	Code           int             `json:"code"`
 }
 
 type embedVideo struct {
-	ID              string        `json:"id"`
-	Description     string        `json:"desc"`
-	Height          int           `json:"height"`
-	Width           int           `json:"width"`
-	Ratio           string        `json:"ratio"`
-	CoverURL        string        `json:"coverUrl"`
-	OriginCoverURL  string        `json:"originCoverUrl"`
-	DynamicCoverURL string        `json:"dynamicCoverUrl"`
-	PlayAddress     string        `json:"playAddr"`
-	PlayCount       flexibleInt64 `json:"playCount"`
-	PrivateItem     bool          `json:"privateItem"`
-	AuthorUniqueID  string        `json:"authorUniqueId"`
-}
-
-type flexibleInt64 int64
-
-func (value *flexibleInt64) UnmarshalJSON(data []byte) error {
-	data = bytes.TrimSpace(data)
-	if len(data) == 0 || bytes.Equal(data, []byte("null")) {
-		*value = 0
-		return nil
-	}
-	if data[0] == '"' {
-		var text string
-		if err := json.Unmarshal(data, &text); err != nil {
-			return err
-		}
-		parsed, err := strconv.ParseInt(text, 10, 64)
-		if err != nil {
-			return err
-		}
-		*value = flexibleInt64(parsed)
-		return nil
-	}
-	parsed, err := strconv.ParseInt(string(data), 10, 64)
-	if err != nil {
-		return err
-	}
-	*value = flexibleInt64(parsed)
-	return nil
+	ID              string          `json:"id"`
+	Description     string          `json:"desc"`
+	Height          int             `json:"height"`
+	Width           int             `json:"width"`
+	Ratio           string          `json:"ratio"`
+	CoverURL        string          `json:"coverUrl"`
+	OriginCoverURL  string          `json:"originCoverUrl"`
+	DynamicCoverURL string          `json:"dynamicCoverUrl"`
+	PlayAddress     string          `json:"playAddr"`
+	PlayCount       jsonvalue.Int64 `json:"playCount"`
+	PrivateItem     bool            `json:"privateItem"`
+	AuthorUniqueID  string          `json:"authorUniqueId"`
 }

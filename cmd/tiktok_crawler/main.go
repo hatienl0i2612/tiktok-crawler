@@ -21,6 +21,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/cliargs"
 	"github.com/hatienl0i2612/tiktok-crawler/cookies"
 	"github.com/hatienl0i2612/tiktok-crawler/downloader"
+	"github.com/hatienl0i2612/tiktok-crawler/hashtag"
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"
 	"github.com/hatienl0i2612/tiktok-crawler/media"
 	"github.com/hatienl0i2612/tiktok-crawler/mpv"
@@ -40,7 +41,7 @@ const (
 	maxReleaseResponseSize  = 1 << 20
 	latestReleaseAPI        = "https://api.github.com/repos/hatienl0i2612/tiktok-crawler/releases/latest"
 	projectLatestReleaseURL = "https://github.com/hatienl0i2612/tiktok-crawler/releases/latest"
-	cliDescription          = "Crawl and download public TikTok videos, photos, profiles, Short Drama, and play LIVE streams with mpv."
+	cliDescription          = "Crawl and download public TikTok videos, photos, profiles, hashtags, Short Drama, and play LIVE streams with mpv."
 )
 
 var buildVersion = "dev"
@@ -53,6 +54,7 @@ var (
 	photoPathPattern      = regexp.MustCompile(`^/@[^/]+/photo/[0-9]+/?$`)
 	shortDramaPathPattern = regexp.MustCompile(`^/shortdrama/episode/[0-9]+/[1-9][0-9]*/?$`)
 	profilePathPattern    = regexp.MustCompile(`^/@[^/]+/?$`)
+	hashtagPathPattern    = regexp.MustCompile(`^/tag/[^/]+/?$`)
 )
 
 type contentType string
@@ -63,6 +65,7 @@ const (
 	contentTypePhoto      contentType = "photo"
 	contentTypeShortDrama contentType = "short_drama"
 	contentTypeProfile    contentType = "profile"
+	contentTypeHashtag    contentType = "hashtag"
 )
 
 type options struct {
@@ -168,6 +171,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runShortDrama(options, cookie, stdout, stderr)
 	case contentTypeProfile:
 		return runProfile(options, cookie, stdout, stderr)
+	case contentTypeHashtag:
+		return runHashtag(options, cookie, stdout, stderr)
 	case contentTypeLive:
 		return runLive(options, cookie, stdout, stderr)
 	default:
@@ -229,7 +234,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags := flag.NewFlagSet("tiktok_crawler", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.BoolVar(&options.json, "json", false, "print resolved metadata as JSON")
-	flags.StringVar(&options.output, "output", "", "download destination; an output directory for profiles and Photo Posts (ignored for LIVE URLs)")
+	flags.StringVar(&options.output, "output", "", "download destination; an output directory for profiles, hashtags, and Photo Posts (ignored for LIVE URLs)")
 	flags.StringVar(&options.quality, "quality", "best", "video height: best, 576, 720, 1080p, and so on (ignored for Photo Posts and LIVE URLs)")
 	flags.BoolVar(&options.watermark, "watermark", false, "download TikTok's official watermarked video or image variant (ignored for LIVE URLs)")
 	flags.BoolVar(&options.verbose, "verbose", false, "print a LIVE room summary to stderr (ignored for video URLs)")
@@ -239,7 +244,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	flags.Var(&headerValues, "headers", "additional HTTP header to send on every request, as 'Key: Value'; User-Agent can be set here; may be repeated")
 	flags.DurationVar(&options.timeout, "timeout", 20*time.Second, "LIVE request timeout (ignored for video URLs)")
 	flags.Usage = func() {
-		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Photo Post, profile, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
+		fmt.Fprintf(flags.Output(), "Usage: %s [options] <TikTok video, Photo Post, profile, hashtag, Short Drama episode, or LIVE URL>\nOptions may appear before or after the URL.\n\n", flags.Name())
 		flags.PrintDefaults()
 	}
 
@@ -254,7 +259,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
-		return options, errors.New("exactly one TikTok video, Photo Post, profile, Short Drama episode, or LIVE URL is required")
+		return options, errors.New("exactly one TikTok video, Photo Post, profile, hashtag, Short Drama episode, or LIVE URL is required")
 	}
 	options.inputURL = flags.Arg(0)
 
@@ -272,7 +277,7 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	}
 
 	switch options.content {
-	case contentTypeVideo, contentTypeShortDrama, contentTypeProfile:
+	case contentTypeVideo, contentTypeShortDrama, contentTypeProfile, contentTypeHashtag:
 		options.quality = strings.ToLower(strings.TrimSpace(options.quality))
 		options.output = strings.TrimSpace(options.output)
 		if options.json && (options.output != "" || options.watermark || options.quality != "best") {
@@ -426,8 +431,10 @@ func detectContentType(rawURL string) (contentType, error) {
 		return contentTypeShortDrama, nil
 	case profilePathPattern.MatchString(parsed.EscapedPath()):
 		return contentTypeProfile, nil
+	case hashtagPathPattern.MatchString(parsed.EscapedPath()):
+		return contentTypeHashtag, nil
 	default:
-		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, profile, Short Drama episode, or LIVE URL: %q", rawURL)
+		return "", fmt.Errorf("URL must be a TikTok video, Photo Post, profile, hashtag, Short Drama episode, or LIVE URL: %q", rawURL)
 	}
 }
 
@@ -561,12 +568,84 @@ func runProfile(options options, cookie string, stdout, stderr io.Writer) error 
 	return nil
 }
 
+func runHashtag(options options, cookie string, stdout, stderr io.Writer) error {
+	client, err := hashtag.NewClient(hashtag.ClientOptions{Cookie: cookie, Headers: options.headers})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), videoRequestTimeout)
+	defer cancel()
+
+	result, err := client.Resolve(ctx, options.inputURL)
+	if err != nil {
+		return err
+	}
+	if options.json {
+		return printJSON(stdout, result)
+	}
+	if len(result.Videos) == 0 {
+		return errors.New("TikTok tag embed returned no public videos to download")
+	}
+
+	items := make([]downloader.BatchItem, 0, len(result.Videos))
+	for index, item := range result.Videos {
+		resolved, resolveErr := client.Video().Resolve(ctx, item.URL)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve hashtag video %d/%d (%s): %w", index+1, len(result.Videos), item.ID, resolveErr)
+		}
+		items = append(items, downloader.BatchItem{
+			Variants: resolved.Media,
+			File: downloader.FileInfo{
+				Author:  resolved.Video.Author.UniqueID,
+				VideoID: resolved.Video.ID,
+				Referer: resolved.FinalURL,
+			},
+		})
+	}
+
+	outputDirectory := options.output
+	if outputDirectory == "" {
+		outputDirectory = defaultHashtagOutputDirectory(result.Hashtag.Name)
+	}
+	progress := newProgressDisplay(stderr)
+	downloads, err := downloader.DownloadAll(ctx, client.Session(), items, downloader.FileInfo{
+		Author: result.Hashtag.Name, VideoID: "videos", Referer: result.FinalURL,
+	}, downloader.BatchOptions{
+		OutputDir: outputDirectory, Quality: options.quality, Watermarked: options.watermark,
+		Progress: func(update downloader.BatchProgress) {
+			progress.update(update.DownloadProgress)
+		},
+		OnStart: func(start downloader.BatchStart) {
+			progress.startHashtagVideo(start.Index, start.Total, start.File.Author, start.File.VideoID, start.Media, start.OutputPath)
+		},
+	})
+	if err != nil {
+		progress.stop()
+		return err
+	}
+	progress.completeVideoBatch(downloads.Downloads)
+	for _, download := range downloads.Downloads {
+		if _, err := fmt.Fprintln(stdout, download.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func defaultProfileOutputDirectory(username string) string {
 	username = strings.Trim(strings.TrimSpace(username), "._")
 	if username == "" {
 		username = "tiktok"
 	}
 	return username + "_videos"
+}
+
+func defaultHashtagOutputDirectory(tagName string) string {
+	tagName = strings.Trim(strings.TrimSpace(tagName), "._")
+	if tagName == "" {
+		tagName = "tiktok_tag"
+	}
+	return tagName + "_videos"
 }
 
 func downloadVideo(
@@ -771,6 +850,10 @@ func (display *progressDisplay) startMusic(username, photoID string, variant *me
 
 func (display *progressDisplay) startProfileVideo(index, total int, username, videoID string, variant *media.Variant, outputPath string) {
 	display.startAsset(fmt.Sprintf("Downloading TikTok profile video %d/%d", index, total), "Video", "Media", username, videoID, variant, outputPath)
+}
+
+func (display *progressDisplay) startHashtagVideo(index, total int, username, videoID string, variant *media.Variant, outputPath string) {
+	display.startAsset(fmt.Sprintf("Downloading TikTok hashtag video %d/%d", index, total), "Video", "Media", username, videoID, variant, outputPath)
 }
 
 func (display *progressDisplay) startAsset(title, idLabel, mediaLabel, username, contentID string, variant *media.Variant, outputPath string) {

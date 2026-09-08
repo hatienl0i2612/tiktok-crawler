@@ -6,8 +6,8 @@
 
 Repository này cung cấp một thư viện Go cùng công cụ dòng lệnh:
 
-- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, profile creator, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
-- **CLI**: `tiktok_crawler` tự nhận diện loại URL, crawl profile creator, tải video TikTok, Photo Post và tập Short Drama công khai, đồng thời mở stream TikTok LIVE tốt nhất bằng mpv.
+- **Thư viện**: các package có thể import được từ `github.com/hatienl0i2612/tiktok-crawler` để resolve video, profile creator, trang hashtag, Photo Post, tập Short Drama và phòng LIVE, kèm helper cho cookie, media và download.
+- **CLI**: `tiktok_crawler` tự nhận diện loại URL, crawl profile creator và hashtag, tải các video TikTok công khai tương ứng, Photo Post và tập Short Drama, đồng thời mở stream TikTok LIVE tốt nhất bằng mpv.
 
 Công cụ sử dụng thư viện chuẩn của Go, cùng package `browsercookie` để tùy chọn nhập cookie từ trình duyệt đã cài đặt.
 
@@ -25,7 +25,7 @@ client, _ := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `photo`, `livestream`, `mpv`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
+Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `hashtag`, `photo`, `livestream`, `mpv`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 
@@ -72,6 +72,7 @@ Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn x
 | Video | `https://www.tiktok.com/@username/video/<id>` | Tải video |
 | Photo Post / Story ảnh | `https://www.tiktok.com/@username/photo/<id>` | Tải toàn bộ ảnh và nhạc của bài đăng nếu có |
 | Profile creator | `https://www.tiktok.com/@username` | Tải các video public gần đây do TikTok cung cấp |
+| Hashtag | `https://www.tiktok.com/tag/<name>` | Tải các video public do tag embed của TikTok cung cấp |
 | Tập Short Drama | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | Tải tập phim |
 | LIVE | `https://www.tiktok.com/@username/live` | Mở stream tốt nhất bằng mpv |
 
