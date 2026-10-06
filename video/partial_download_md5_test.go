@@ -61,22 +61,34 @@ func TestDownloadVideoPartialMD5Integration(t *testing.T) {
 		t.Fatalf("invalid media URL %q: %v", selected.URL, err)
 	}
 
-	// Request only the leading chunk; the stream is cut manually below in case
-	// the CDN ignores Range and answers with a full 200 response.
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, selected.URL, nil)
-	if err != nil {
-		t.Fatalf("build media request: %v", err)
+	// Follow the downloader's backup order: TikTok can reject a CDN URL while
+	// serving the same profile through its /aweme/v1/play/ backup. Request only
+	// the leading chunk; limit the reader below if the server ignores Range.
+	var response *http.Response
+	var failures []string
+	for _, mediaURL := range media.UniqueStrings(append([]string{selected.URL}, selected.BackupURLs...)) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaURL, nil)
+		if err != nil {
+			t.Fatalf("build media request: %v", err)
+		}
+		client.Session().SetHeaders(request, "video/mp4,video/*;q=0.9,*/*;q=0.7", result.FinalURL)
+		request.Header.Set("Range", fmt.Sprintf("bytes=0-%d", chunkSize-1))
+		candidate, err := client.Session().HTTPClient().Do(request)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		if candidate.StatusCode == http.StatusPartialContent || candidate.StatusCode == http.StatusOK {
+			response = candidate
+			break
+		}
+		failures = append(failures, fmt.Sprintf("%s: HTTP %s", request.URL.Hostname(), candidate.Status))
+		candidate.Body.Close()
 	}
-	client.Session().SetHeaders(request, "video/mp4,video/*;q=0.9,*/*;q=0.7", result.FinalURL)
-	request.Header.Set("Range", fmt.Sprintf("bytes=0-%d", chunkSize-1))
-	response, err := client.Session().HTTPClient().Do(request)
-	if err != nil {
-		t.Fatalf("download first %d bytes: %v", chunkSize, err)
+	if response == nil {
+		t.Fatalf("download first %d bytes: all profile URLs failed: %s", chunkSize, strings.Join(failures, "; "))
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusPartialContent && response.StatusCode != http.StatusOK {
-		t.Fatalf("media download returned HTTP %s", response.Status)
-	}
 	if finalHost := response.Request.URL.Hostname(); !tiktok.IsAllowedHost(finalHost) {
 		t.Fatalf("download redirect landed on a disallowed host: %s", finalHost)
 	}

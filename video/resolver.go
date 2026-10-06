@@ -34,7 +34,7 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	}
 
 	videoID := videoIDFromURL(inputURL)
-	pageMediaURLs, fetchedURL, pageErr := client.fetchPageMedia(ctx, inputURL.String())
+	pageMediaURLs, pageItem, fetchedURL, pageErr := client.fetchPageMedia(ctx, inputURL.String())
 	pageAttempts := 1
 	finalURL := inputURL.String()
 	if fetchedURL != "" {
@@ -55,7 +55,7 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	}
 	for len(pageMediaURLs.Download) == 0 && pageAttempts < maxVideoPageAttempts {
 		pageAttempts++
-		retryMediaURLs, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
+		retryMediaURLs, retryItem, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
 		if retryErr != nil {
 			continue
 		}
@@ -64,19 +64,29 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 			finalURL = retryURL
 		}
 		pageMediaURLs = mergeExtractedMediaURLs(retryMediaURLs, pageMediaURLs)
+		if retryItem != nil && retryItem.ID == videoID {
+			pageItem = retryItem
+		}
 	}
 
-	player, playerBody, err := client.fetchPlayer(ctx, videoID, finalURL)
-	if err != nil {
+	player, playerBody, playerErr := client.fetchPlayer(ctx, videoID, finalURL)
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(player.Items) == 0 {
+	var result *Result
+	if playerErr == nil && len(player.Items) > 0 {
+		result = buildPlayerResult(inputURL.String(), finalURL, player.Items[0])
+		result.Sources = append(result.Sources, "player/api/v1/items")
+	} else if pageItem != nil && pageItem.ID == videoID {
+		result = buildPageResult(inputURL.String(), finalURL, *pageItem)
+	}
+	if result == nil {
 		// TikTok occasionally emits a signed Story URL that always returns 403.
 		// Collect independently signed page URLs so the downloader can fall back
 		// without silently switching to the watermarked embed object.
 		for pageAttempts < maxVideoPageAttempts {
 			pageAttempts++
-			retryMediaURLs, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
+			retryMediaURLs, _, retryURL, retryErr := client.fetchPageMedia(ctx, finalURL)
 			if retryErr != nil {
 				continue
 			}
@@ -88,9 +98,12 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		}
 		embed, embedErr := client.fetchEmbed(ctx, videoID, finalURL)
 		if embedErr != nil {
-			return nil, fmt.Errorf("TikTok player returned no video item and the Story embed fallback failed: %w", embedErr)
+			return nil, errors.Join(playerErr, fmt.Errorf("TikTok returned no video item and the embed fallback failed: %w", embedErr))
 		}
-		result := buildEmbedResult(inputURL.String(), finalURL, embed, true)
+		result := buildEmbedResult(inputURL.String(), finalURL, embed, playerErr == nil)
+		if playerErr != nil {
+			result.Warnings = append(result.Warnings, "player metadata unavailable: "+playerErr.Error())
+		}
 		if pageErr != nil {
 			result.Warnings = append(result.Warnings, "video page unavailable: "+pageErr.Error())
 		}
@@ -102,12 +115,13 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		appendWatermarkedMedia(result, uniqueStrings(watermarkedURLs))
 		sortMedia(result.Media)
 		if len(result.Media) == 0 {
-			return nil, errors.New("TikTok returned Story metadata but no downloadable video")
+			return nil, errors.New("TikTok returned embed metadata but no downloadable video")
 		}
 		return result, nil
 	}
-	result := buildPlayerResult(inputURL.String(), finalURL, player.Items[0])
-	result.Sources = append(result.Sources, "player/api/v1/items")
+	if playerErr != nil {
+		result.Warnings = append(result.Warnings, "player metadata unavailable: "+playerErr.Error())
+	}
 
 	embed, embedErr := client.fetchEmbed(ctx, videoID, finalURL)
 	if embedErr == nil {
@@ -133,14 +147,15 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	return result, nil
 }
 
-func (client *Client) fetchPageMedia(ctx context.Context, target string) (extractedMediaURLs, string, error) {
+func (client *Client) fetchPageMedia(ctx context.Context, target string) (extractedMediaURLs, *pageVideoItem, string, error) {
 	body, finalURL, err := client.fetchMetadata(
 		ctx,
 		target,
 		"text/html,application/xhtml+xml",
 		"",
 	)
-	return extractMediaURLsFromHTML(body), finalURL, err
+	item, _ := parsePageVideoItem(body)
+	return extractMediaURLsFromHTML(body), item, finalURL, err
 }
 
 func (client *Client) fetchPlayer(

@@ -6,12 +6,12 @@ import (
 	"time"
 
 	"github.com/hatienl0i2612/tiktok-crawler/media"
+	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
 
-// DefaultUserAgent follows TikTok's mobile web path, which exposes the complete
-// server-rendered video state more consistently than its desktop CSR fallback.
-const DefaultUserAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) " +
-	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Mobile Safari/537.36"
+// DefaultUserAgent requests the desktop page, whose hydration data includes
+// video metadata, quality profiles, and their independently hosted backup URLs.
+const DefaultUserAgent = tiktok.DefaultUserAgent
 
 // ClientOptions configures the HTTP session used to crawl TikTok videos.
 type ClientOptions struct {
