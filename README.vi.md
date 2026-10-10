@@ -88,6 +88,8 @@ Các option có thể đặt trước hoặc sau URL.
 
 Chạy executable không có argument—hoặc double-click trên Windows—để vào interactive mode. Dán TikTok URL khi được hỏi; nếu có lỗi, chương trình sẽ quay lại màn hình nhập URL, còn sau khi xử lý thành công chương trình sẽ chờ bạn nhấn Enter rồi mới đóng.
 
+Khi khởi động, tool kiểm tra bản phát hành mới trên GitHub và in cảnh báo cập nhật vào stderr nếu có bản mới hơn. Kiểm tra có timeout 5 giây; lỗi mạng không ngăn tool hoạt động bình thường.
+
 | Option | Mô tả |
 | --- | --- |
 | `-json` | In metadata đã resolve dưới dạng JSON thay vì tải hoặc phát |

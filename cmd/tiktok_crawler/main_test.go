@@ -265,8 +265,8 @@ func TestRunPrintsVersionWithoutURL(t *testing.T) {
 	for _, argument := range []string{"-version", "--version"} {
 		t.Run(argument, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
-			if err := run([]string{argument}, &stdout, &stderr); err != nil {
-				t.Fatalf("run(%q): %v", argument, err)
+			if err := runCLI([]string{argument}, nil, &stdout, &stderr, false); err != nil {
+				t.Fatalf("runCLI(%q): %v", argument, err)
 			}
 			if got := stdout.String(); got != "tiktok_crawler v1.2.3\n"+cliDescription+"\n" {
 				t.Fatalf("stdout = %q", got)
@@ -278,26 +278,63 @@ func TestRunPrintsVersionWithoutURL(t *testing.T) {
 	}
 }
 
-func TestPrintVersionWarnsWhenUpdateIsAvailable(t *testing.T) {
+func TestRunCLIWarnsWhenUpdateIsAvailable(t *testing.T) {
 	previous := buildVersion
 	previousFetcher := latestReleaseFetcher
 	buildVersion = "v1.1.5"
-	latestReleaseFetcher = func(context.Context) (string, error) { return "v1.1.6", nil }
+	checks := 0
+	latestReleaseFetcher = func(ctx context.Context) (string, error) {
+		checks++
+		deadline, ok := ctx.Deadline()
+		if !ok || time.Until(deadline) > versionCheckTimeout {
+			t.Fatal("update check must have a bounded timeout")
+		}
+		return "v1.1.6", nil
+	}
 	t.Cleanup(func() {
 		buildVersion = previous
 		latestReleaseFetcher = previousFetcher
 	})
 
-	var stdout, stderr bytes.Buffer
-	if err := printVersion(&stdout, &stderr); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stderr.String(), "v1.1.6 (current: v1.1.5)") || !strings.Contains(stderr.String(), projectLatestReleaseURL) {
-		t.Fatalf("update warning = %q", stderr.String())
+	for _, test := range []struct {
+		name        string
+		args        []string
+		input       string
+		interactive bool
+		wantError   bool
+	}{
+		{name: "version", args: []string{"-version"}},
+		{name: "interactive retries", input: "invalid-url\nanother-invalid-url\n\n", interactive: true},
+		{
+			name:      "URL command",
+			args:      []string{"https://www.tiktok.com/@creator/video/1234567890123456789", "-cookies-file", filepath.Join(t.TempDir(), "missing.txt")},
+			wantError: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			checks = 0
+			var stdout, stderr bytes.Buffer
+			err := runCLI(test.args, strings.NewReader(test.input), &stdout, &stderr, test.interactive)
+			if (err != nil) != test.wantError {
+				t.Fatalf("runCLI error = %v, wantError = %v", err, test.wantError)
+			}
+			if checks != 1 || strings.Count(stderr.String(), "Warning: a newer") != 1 {
+				t.Fatalf("checks = %d, stderr = %q", checks, stderr.String())
+			}
+			if !strings.Contains(stderr.String(), "v1.1.6 (current: v1.1.5)") || !strings.Contains(stderr.String(), projectLatestReleaseURL) {
+				t.Fatalf("update warning = %q", stderr.String())
+			}
+			if test.interactive && strings.Count(stdout.String(), "Paste a TikTok URL") != 3 {
+				t.Fatalf("stdout = %q", stdout.String())
+			}
+			if test.interactive && strings.Contains(stdout.String(), cliDescription) {
+				t.Fatalf("interactive mode printed version description: %q", stdout.String())
+			}
+		})
 	}
 }
 
-func TestPrintVersionIgnoresFailedUpdateCheck(t *testing.T) {
+func TestRunCLIIgnoresFailedUpdateCheck(t *testing.T) {
 	previous := buildVersion
 	previousFetcher := latestReleaseFetcher
 	buildVersion = "v1.1.5"
@@ -307,12 +344,24 @@ func TestPrintVersionIgnoresFailedUpdateCheck(t *testing.T) {
 		latestReleaseFetcher = previousFetcher
 	})
 
-	var stdout, stderr bytes.Buffer
-	if err := printVersion(&stdout, &stderr); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stdout.String(), "v1.1.5") || stderr.Len() != 0 {
-		t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+	for _, test := range []struct {
+		name        string
+		args        []string
+		interactive bool
+		wantOutput  string
+	}{
+		{name: "version", args: []string{"-version"}, wantOutput: "v1.1.5"},
+		{name: "interactive", interactive: true, wantOutput: "Paste a TikTok URL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if err := runCLI(test.args, strings.NewReader("\n"), &stdout, &stderr, test.interactive); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(stdout.String(), test.wantOutput) || stderr.Len() != 0 {
+				t.Fatalf("stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+		})
 	}
 }
 

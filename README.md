@@ -129,6 +129,8 @@ Options may appear before or after the URL.
 
 Run the executable without arguments—or double-click it on Windows—to enter interactive mode. Paste a TikTok URL when prompted; errors return to the prompt, and a successful run waits for Enter before closing.
 
+On startup, the tool checks GitHub for a newer release and prints an update warning to stderr when available. The check times out after 5 seconds; network failures do not prevent normal use.
+
 | Option | Description |
 | --- | --- |
 | `-json` | Print resolved metadata as JSON instead of downloading or playing |

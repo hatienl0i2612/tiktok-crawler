@@ -84,17 +84,21 @@ type options struct {
 }
 
 func main() {
-	args := os.Args[1:]
-	var err error
-	if len(args) == 0 && isInteractiveTerminal(os.Stdin) {
-		err = runInteractive(os.Stdin, os.Stdout, os.Stderr, run)
-	} else {
-		err = run(args, os.Stdout, os.Stderr)
-	}
+	err := runCLI(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, isInteractiveTerminal(os.Stdin))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
 		os.Exit(1)
 	}
+}
+
+func runCLI(args []string, input io.Reader, stdout, stderr io.Writer, interactive bool) error {
+	if err := warnIfUpdateAvailable(stderr); err != nil {
+		return err
+	}
+	if len(args) == 0 && interactive {
+		return runInteractive(input, stdout, stderr, run)
+	}
+	return run(args, stdout, stderr)
 }
 
 type interactiveRunner func([]string, io.Writer, io.Writer) error
@@ -155,7 +159,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if options.version {
-		return printVersion(stdout, stderr)
+		return printVersion(stdout)
 	}
 	cookie, err := resolveCookieSources(options)
 	if err != nil {
@@ -303,11 +307,13 @@ func parseOptions(args []string, stderr io.Writer) (options, error) {
 	return options, nil
 }
 
-func printVersion(writer, warningWriter io.Writer) error {
+func printVersion(writer io.Writer) error {
+	_, err := fmt.Fprintf(writer, "tiktok_crawler %s\n%s\n", currentVersion(), cliDescription)
+	return err
+}
+
+func warnIfUpdateAvailable(warningWriter io.Writer) error {
 	current := currentVersion()
-	if _, err := fmt.Fprintf(writer, "tiktok_crawler %s\n%s\n", current, cliDescription); err != nil {
-		return err
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), versionCheckTimeout)
 	latest, err := latestReleaseFetcher(ctx)
 	cancel()
