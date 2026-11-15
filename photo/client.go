@@ -7,7 +7,7 @@ import (
 
 const maxMetadataResponseSize = 16 << 20
 
-// Client resolves TikTok Photo Posts and photo Stories using the same mobile
+// Client resolves TikTok Photo Posts and photo Stories using the same desktop
 // web session as the regular video resolver.
 type Client struct {
 	session *tiktok.Session

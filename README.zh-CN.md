@@ -25,7 +25,7 @@ client, err := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-也可直接使用子包：`video`、`profile`、`hashtag`、`photo`、`livestream`、`mpv`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
+也可直接使用子包：`video`、`profile`、`hashtag`、`photo`、`livestream`、`mpv`、`ffmpeg`、`shortdrama`、`cookies`、`downloader`、`media`、`tiktok`。完整 API 见 [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler)。
 
 ## 下载发行版
 
@@ -75,6 +75,12 @@ chmod +x tiktok_crawler-darwin-arm64
 | 话题标签 | `https://www.tiktok.com/tag/<name>` | 下载 TikTok 标签嵌入页提供的公开视频 |
 | 短剧剧集 | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | 下载该剧集 |
 | LIVE 直播 | `https://www.tiktok.com/@username/live` | 使用 mpv 打开最佳可用直播流 |
+
+## DASH 视频与 FFmpeg
+
+部分 TikTok 画质版本的视频和音频是独立轨道。下载器会下载两个轨道，必要时尝试备用 URL，再通过 FFmpeg stream copy 合并为一个 MP4，保持原始画质。
+
+需要时，工具优先使用 PATH 中的 `ffmpeg`；否则从 [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) 自动下载便携版本，校验 SHA-256，并缓存到 `<系统临时目录>/tiktok-crawler/ffmpeg/<os>-<arch>`，无需管理员权限。自动安装支持 macOS amd64/arm64、Linux amd64/arm64/arm/386 和 Windows amd64；其他平台可自行将 FFmpeg 安装到 PATH。`-json` 模式以及音视频已合并的下载不会安装 FFmpeg。
 
 ## CLI 选项
 

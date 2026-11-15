@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/hatienl0i2612/tiktok-crawler/ffmpeg"
 	"github.com/hatienl0i2612/tiktok-crawler/media"
 	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
@@ -23,6 +24,7 @@ type downloadOptions struct {
 	OutputPath string
 	Referer    string
 	Progress   func(DownloadProgress)
+	Status     io.Writer
 }
 
 // Download selects the requested variant and saves one media file to disk.
@@ -52,6 +54,7 @@ func Download(
 		OutputPath: outputPath,
 		Referer:    file.Referer,
 		Progress:   options.Progress,
+		Status:     options.Status,
 	})
 }
 
@@ -111,6 +114,7 @@ func DownloadAll(
 		download, err := downloadVariant(ctx, session, *selected, downloadOptions{
 			OutputPath: outputPath,
 			Referer:    itemFile.Referer,
+			Status:     options.Status,
 			Progress: func(progress DownloadProgress) {
 				if options.Progress != nil {
 					options.Progress(BatchProgress{Index: index + 1, Total: len(items), DownloadProgress: progress})
@@ -169,6 +173,18 @@ func downloadVariant(
 		return nil, fmt.Errorf("output directory is not a directory: %s", directory)
 	}
 
+	if variant.Audio != nil {
+		if len(media.UniqueStrings(append([]string{variant.Audio.URL}, variant.Audio.BackupURLs...))) == 0 {
+			return nil, errors.New("DASH video requires a separate audio track, but no matching audio URL was provided")
+		}
+		executable, err := ffmpeg.NewManager(ffmpeg.Options{Status: options.Status}).Ensure(ctx)
+		if err != nil {
+			return nil, err
+		}
+		options.OutputPath = absolutePath
+		return downloadWithAudio(ctx, session, variant, options, executable)
+	}
+
 	urls := media.UniqueStrings(append([]string{variant.URL}, variant.BackupURLs...))
 	if len(urls) == 0 {
 		return nil, errors.New("selected media has no download URL")
@@ -196,8 +212,8 @@ func downloadURL(
 	options downloadOptions,
 ) (*DownloadResult, error) {
 	parsed, err := url.Parse(mediaURL)
-	if err != nil || parsed.Scheme != "https" || !tiktok.IsAllowedHost(parsed.Hostname()) {
-		return nil, fmt.Errorf("refuse disallowed media URL: %s", redactURL(mediaURL))
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
+		return nil, fmt.Errorf("refuse invalid HTTPS media URL: %s", redactURL(mediaURL))
 	}
 	response, err := session.Get(ctx, parsed.String(), "video/mp4,video/*;q=0.9,audio/*;q=0.9,image/avif,image/webp,image/apng,image/*;q=0.8,*/*;q=0.7", options.Referer)
 	if err != nil {
@@ -210,8 +226,8 @@ func downloadURL(
 	if response.StatusCode == http.StatusPartialContent {
 		return nil, fmt.Errorf("download %s returned an unexpected partial response", parsed.Hostname())
 	}
-	if !tiktok.IsAllowedHost(response.Request.URL.Hostname()) {
-		return nil, fmt.Errorf("download ended at a disallowed host: %s", response.Request.URL.Redacted())
+	if response.Request.URL.Scheme != "https" || response.Request.URL.Hostname() == "" {
+		return nil, fmt.Errorf("download ended at an invalid HTTPS URL: %s", response.Request.URL.Redacted())
 	}
 
 	reader := bufio.NewReader(response.Body)
@@ -256,16 +272,23 @@ func downloadURL(
 	if err := temporary.Close(); err != nil {
 		return nil, fmt.Errorf("close temporary download: %w", err)
 	}
-	if _, err := os.Lstat(outputPath); err == nil {
-		return nil, fmt.Errorf("output file appeared during download: %s", outputPath)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("inspect output path: %w", err)
-	}
-	if err := os.Rename(temporaryPath, outputPath); err != nil {
-		return nil, fmt.Errorf("publish download: %w", err)
+	if err := publishDownload(temporaryPath, outputPath); err != nil {
+		return nil, err
 	}
 	keepTemporary = true
 	return &DownloadResult{Path: outputPath, Bytes: written, ContentType: contentType, SourceURL: response.Request.URL.String()}, nil
+}
+
+func publishDownload(temporaryPath, outputPath string) error {
+	if _, err := os.Lstat(outputPath); err == nil {
+		return fmt.Errorf("output file appeared during download: %s", outputPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("inspect output path: %w", err)
+	}
+	if err := os.Rename(temporaryPath, outputPath); err != nil {
+		return fmt.Errorf("publish download: %w", err)
+	}
+	return nil
 }
 
 type progressWriter struct {

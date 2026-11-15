@@ -60,6 +60,7 @@ import (
 	"github.com/hatienl0i2612/tiktok-crawler/photo"       // photo.Result, photo.Image, ...
 	"github.com/hatienl0i2612/tiktok-crawler/livestream"  // livestream.Result, livestream.Stream, ...
 	"github.com/hatienl0i2612/tiktok-crawler/mpv"         // portable mpv discovery, install, and playback
+	"github.com/hatienl0i2612/tiktok-crawler/ffmpeg"      // portable FFmpeg discovery and installation
 	"github.com/hatienl0i2612/tiktok-crawler/shortdrama"  // shortdrama.Result, ...
 	"github.com/hatienl0i2612/tiktok-crawler/cookies"     // cookies.LoadTikTokCookieHeader, ...
 	"github.com/hatienl0i2612/tiktok-crawler/downloader"  // downloader.Download, ...
@@ -116,6 +117,12 @@ Replace the example URLs with the TikTok video or LIVE room you want to process.
 | Hashtag | `https://www.tiktok.com/tag/<name>` | Download the public videos exposed by TikTok's tag embed |
 | Short Drama episode | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | Download the episode |
 | LIVE | `https://www.tiktok.com/@username/live` | Open the best available stream in mpv |
+
+## FFmpeg for DASH videos
+
+Some TikTok quality profiles contain separate video and audio tracks. The downloader fetches both tracks, including their backup URLs, and combines them into one MP4 with FFmpeg stream copy, preserving the original quality.
+
+When needed, it uses `ffmpeg` from PATH or automatically downloads a portable build from [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static). Downloads are verified against the release's SHA-256 digest and cached under `<OS temporary directory>/tiktok-crawler/ffmpeg/<os>-<arch>`; administrator access is not required. Automatic installation supports macOS amd64/arm64, Linux amd64/arm64/arm/386, and Windows amd64. Other platforms can use FFmpeg installed in PATH. Metadata-only (`-json`) and downloads with combined audio/video do not install FFmpeg.
 
 ## CLI options
 

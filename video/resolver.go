@@ -77,6 +77,14 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 	if playerErr == nil && len(player.Items) > 0 {
 		result = buildPlayerResult(inputURL.String(), finalURL, player.Items[0])
 		result.Sources = append(result.Sources, "player/api/v1/items")
+		if pageItem != nil && pageItem.ID == videoID && len(pageItem.Video.BitrateAudioInfo) > 0 {
+			// The desktop page preserves DASH audio associations omitted by the Player API.
+			page := buildPageResult(inputURL.String(), finalURL, *pageItem)
+			if len(page.Media) > 0 {
+				result.Media = page.Media
+				result.Sources = append(result.Sources, "__UNIVERSAL_DATA_FOR_REHYDRATION__")
+			}
+		}
 	} else if pageItem != nil && pageItem.ID == videoID {
 		result = buildPageResult(inputURL.String(), finalURL, *pageItem)
 	}
@@ -364,7 +372,17 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 		if len(profile.PlayAddr.URLList) == 0 {
 			continue
 		}
-		format := video.Meta.Format
+		format := profile.Format
+		if format == "" {
+			format = video.Meta.Format
+		}
+		audio := profile.Audio
+		if strings.EqualFold(format, "dash") {
+			format = "mp4"
+			if audio == nil {
+				audio = &Media{Type: "audio"}
+			}
+		}
 		if format == "" {
 			format = "mp4"
 		}
@@ -385,6 +403,7 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 			URL:         profile.PlayAddr.URLList[0],
 			BackupURLs:  uniqueStrings(profile.PlayAddr.URLList[1:]),
 			ExpiresAt:   expiryFromURL(profile.PlayAddr.URLList[0]),
+			Audio:       audio,
 		})
 	}
 	if len(media) > 0 || len(video.URLList) == 0 {
@@ -393,6 +412,10 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 	format := video.Meta.Format
 	if format == "" {
 		format = "mp4"
+	}
+	var audio *Media
+	if strings.EqualFold(format, "dash") {
+		format, audio = "mp4", &Media{Type: "audio"}
 	}
 	return []Media{{
 		Type:        "video",
@@ -408,6 +431,7 @@ func makePlaybackMedia(video playerVideoInfo) []Media {
 		URL:         video.URLList[0],
 		BackupURLs:  uniqueStrings(video.URLList[1:]),
 		ExpiresAt:   expiryFromURL(video.URLList[0]),
+		Audio:       audio,
 	}}
 }
 
@@ -632,7 +656,7 @@ func walkMediaFields(value any, kind mediaURLKind, result *extractedMediaURLs) {
 			return
 		}
 		parsed, err := url.Parse(strings.TrimSpace(typed))
-		if err == nil && parsed.Scheme == "https" && tiktok.IsAllowedHost(parsed.Hostname()) {
+		if err == nil && parsed.Scheme == "https" && parsed.Hostname() != "" {
 			if kind == mediaURLPlayback {
 				result.Playback = append(result.Playback, parsed.String())
 			} else {

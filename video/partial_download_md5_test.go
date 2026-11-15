@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/hatienl0i2612/tiktok-crawler/media"
-	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
 )
 
 // TestDownloadVideoPartialMD5Integration downloads only the first chunk of a
@@ -57,7 +56,7 @@ func TestDownloadVideoPartialMD5Integration(t *testing.T) {
 	media.Sort(variants)
 	selected := variants[0]
 	parsed, err := url.Parse(selected.URL)
-	if err != nil || parsed.Scheme != "https" || !tiktok.IsAllowedHost(parsed.Hostname()) {
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
 		t.Fatalf("invalid media URL %q: %v", selected.URL, err)
 	}
 
@@ -89,8 +88,8 @@ func TestDownloadVideoPartialMD5Integration(t *testing.T) {
 		t.Fatalf("download first %d bytes: all profile URLs failed: %s", chunkSize, strings.Join(failures, "; "))
 	}
 	defer response.Body.Close()
-	if finalHost := response.Request.URL.Hostname(); !tiktok.IsAllowedHost(finalHost) {
-		t.Fatalf("download redirect landed on a disallowed host: %s", finalHost)
+	if finalURL := response.Request.URL; finalURL.Scheme != "https" || finalURL.Hostname() == "" {
+		t.Fatalf("download redirect landed on an invalid HTTPS URL: %s", finalURL.Redacted())
 	}
 
 	hash := md5.New()

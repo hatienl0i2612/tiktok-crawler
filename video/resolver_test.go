@@ -310,22 +310,24 @@ func TestExtractDownloadURLs(t *testing.T) {
 		"downloadAddr": {"urlList": [
 			"https://v16.tiktokcdn.com/a.mp4",
 			"https://v16.tiktokcdn.com/a.mp4",
-			"https://example.org/not-allowed.mp4"
+			"https://cdn-new-region.example/c.mp4",
+			"http://cdn-new-region.example/insecure.mp4",
+			"https:///missing-host.mp4"
 		]},
 		"nested": {"download_url": "https://api.tiktokv.com/b.mp4"},
-		"playAddr": "https://v16.tiktokcdn.com/not-a-download.mp4"
+		"playAddr": "https://cdn-new-region.example/playback.mp4"
 	}`)
 	urls := extractDownloadURLs(body)
-	if len(urls) != 2 || urls[0] != "https://api.tiktokv.com/b.mp4" || urls[1] != "https://v16.tiktokcdn.com/a.mp4" {
+	if len(urls) != 3 || urls[0] != "https://api.tiktokv.com/b.mp4" || urls[1] != "https://cdn-new-region.example/c.mp4" || urls[2] != "https://v16.tiktokcdn.com/a.mp4" {
 		t.Fatalf("unexpected download URLs: %v", urls)
 	}
 	html := append([]byte(`<script>not JSON</script><script type="application/json">`), body...)
 	html = append(html, []byte(`</script>`)...)
-	if got := extractDownloadURLsFromHTML(html); len(got) != 2 {
+	if got := extractDownloadURLsFromHTML(html); len(got) != 3 {
 		t.Fatalf("HTML download URLs: %v", got)
 	}
 	mediaURLs := extractMediaURLsFromHTML(html)
-	if len(mediaURLs.Playback) != 1 || mediaURLs.Playback[0] != "https://v16.tiktokcdn.com/not-a-download.mp4" {
+	if len(mediaURLs.Playback) != 1 || mediaURLs.Playback[0] != "https://cdn-new-region.example/playback.mp4" {
 		t.Fatalf("HTML playback URLs: %v", mediaURLs.Playback)
 	}
 	if got := extractDownloadURLs([]byte(`{`)); got != nil {

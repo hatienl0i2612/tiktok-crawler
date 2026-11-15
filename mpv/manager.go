@@ -5,9 +5,6 @@ package mpv
 import (
 	"archive/zip"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,16 +17,13 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/hatienl0i2612/tiktok-crawler/tiktok"
+	"github.com/hatienl0i2612/tiktok-crawler/internal/portable"
 )
 
 const (
 	stableReleaseURL = "https://api.github.com/repos/mpv-player/mpv/releases/latest"
 	linuxReleaseURL  = "https://api.github.com/repos/pkgforge-dev/mpv-AppImage/releases/latest"
-	maxReleaseSize   = 2 << 20
-	maxArchiveSize   = 256 << 20
 	maxExtractedSize = 1 << 30
 )
 
@@ -61,17 +55,8 @@ type Manager struct {
 	enforceGitHub    bool
 }
 
-type githubRelease struct {
-	TagName string        `json:"tag_name"`
-	Assets  []githubAsset `json:"assets"`
-}
-
-type githubAsset struct {
-	Name   string `json:"name"`
-	URL    string `json:"browser_download_url"`
-	Size   int64  `json:"size"`
-	Digest string `json:"digest"`
-}
+type githubRelease = portable.Release
+type githubAsset = portable.Asset
 
 type archiveKind string
 
@@ -96,7 +81,7 @@ func NewManager(options Options) *Manager {
 		goarch:           runtime.GOARCH,
 		tempDir:          os.TempDir(),
 		lookPath:         exec.LookPath,
-		httpClient:       githubHTTPClient(),
+		httpClient:       portable.HTTPClient(),
 		stableReleaseURL: stableReleaseURL,
 		linuxReleaseURL:  linuxReleaseURL,
 		enforceGitHub:    true,
@@ -130,7 +115,7 @@ func (manager *Manager) Ensure(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("create portable mpv cache parent: %w", err)
 	}
 	manager.report("mpv was not found in PATH; installing a portable build in %s\n", cacheDir)
-	release, err := manager.fetchRelease(ctx, spec.releaseURL)
+	release, err := portable.FetchRelease(ctx, manager.httpClient, spec.releaseURL)
 	if err != nil {
 		return "", err
 	}
@@ -146,7 +131,7 @@ func (manager *Manager) Ensure(ctx context.Context) (string, error) {
 
 	manager.report("Downloading %s (%s)\n", asset.Name, release.TagName)
 	archivePath := filepath.Join(staging, filepath.Base(asset.Name))
-	if err := manager.downloadAsset(ctx, asset, archivePath); err != nil {
+	if err := portable.DownloadAsset(ctx, manager.httpClient, asset, archivePath, manager.enforceGitHub); err != nil {
 		return "", err
 	}
 	installRoot := filepath.Join(staging, "files")
@@ -190,8 +175,8 @@ func (manager *Manager) Ensure(ctx context.Context) (string, error) {
 // Play opens one HTTPS TikTok stream with mpv and waits until the player exits.
 func (manager *Manager) Play(ctx context.Context, executable, streamURL string, options PlayOptions) error {
 	parsed, err := url.Parse(strings.TrimSpace(streamURL))
-	if err != nil || parsed.Scheme != "https" || !tiktok.IsAllowedHost(parsed.Hostname()) {
-		return errors.New("refuse to open a non-TikTok HTTPS stream URL with mpv")
+	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" {
+		return errors.New("mpv requires a valid HTTPS stream URL")
 	}
 	if strings.TrimSpace(executable) == "" {
 		return errors.New("mpv executable path is empty")
@@ -247,34 +232,6 @@ func (manager *Manager) platform() (platformSpec, error) {
 	return spec, nil
 }
 
-func (manager *Manager) fetchRelease(ctx context.Context, endpoint string) (githubRelease, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return githubRelease{}, err
-	}
-	setGitHubHeaders(request)
-	response, err := manager.httpClient.Do(request)
-	if err != nil {
-		return githubRelease{}, fmt.Errorf("fetch latest mpv release: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return githubRelease{}, fmt.Errorf("fetch latest mpv release: HTTP %s", response.Status)
-	}
-	body, err := tiktok.ReadLimited(response.Body, maxReleaseSize)
-	if err != nil {
-		return githubRelease{}, err
-	}
-	var release githubRelease
-	if err := json.Unmarshal(body, &release); err != nil {
-		return githubRelease{}, fmt.Errorf("decode latest mpv release: %w", err)
-	}
-	if release.TagName == "" || len(release.Assets) == 0 {
-		return githubRelease{}, errors.New("latest mpv release contains no downloadable assets")
-	}
-	return release, nil
-}
-
 func selectAsset(release githubRelease, spec platformSpec) (githubAsset, error) {
 	var matches []githubAsset
 	for _, asset := range release.Assets {
@@ -286,84 +243,10 @@ func selectAsset(release githubRelease, spec platformSpec) (githubAsset, error) 
 		return githubAsset{}, fmt.Errorf("mpv release %s has %d assets ending in %q; expected exactly one", release.TagName, len(matches), spec.assetSuffix)
 	}
 	asset := matches[0]
-	if asset.Size <= 0 || asset.Size > maxArchiveSize {
-		return githubAsset{}, fmt.Errorf("mpv asset %s has invalid size %d", asset.Name, asset.Size)
-	}
-	if _, err := expectedSHA256(asset.Digest); err != nil {
+	if err := portable.ValidateAsset(asset); err != nil {
 		return githubAsset{}, fmt.Errorf("mpv asset %s: %w", asset.Name, err)
 	}
 	return asset, nil
-}
-
-func (manager *Manager) downloadAsset(ctx context.Context, asset githubAsset, destination string) error {
-	parsed, err := url.Parse(asset.URL)
-	if err != nil || parsed.Scheme != "https" {
-		if manager.enforceGitHub {
-			return fmt.Errorf("mpv asset has an invalid HTTPS URL")
-		}
-	}
-	if manager.enforceGitHub && !allowedGitHubHost(parsed.Hostname()) {
-		return fmt.Errorf("refuse mpv asset from untrusted host %q", parsed.Hostname())
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, asset.URL, nil)
-	if err != nil {
-		return err
-	}
-	setGitHubHeaders(request)
-	response, err := manager.httpClient.Do(request)
-	if err != nil {
-		return fmt.Errorf("download portable mpv: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return fmt.Errorf("download portable mpv: HTTP %s", response.Status)
-	}
-	file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		return fmt.Errorf("create mpv archive: %w", err)
-	}
-	keep := false
-	defer func() {
-		_ = file.Close()
-		if !keep {
-			_ = os.Remove(destination)
-		}
-	}()
-	hash := sha256.New()
-	written, err := io.Copy(io.MultiWriter(file, hash), io.LimitReader(response.Body, maxArchiveSize+1))
-	if err != nil {
-		return fmt.Errorf("write mpv archive: %w", err)
-	}
-	if written > maxArchiveSize {
-		return fmt.Errorf("mpv archive exceeds the %d MiB limit", maxArchiveSize>>20)
-	}
-	if written != asset.Size {
-		return fmt.Errorf("mpv archive size mismatch: received %d bytes, expected %d", written, asset.Size)
-	}
-	expected, _ := expectedSHA256(asset.Digest)
-	if actual := hash.Sum(nil); !equalBytes(actual, expected) {
-		return fmt.Errorf("mpv archive SHA-256 mismatch: got %s", hex.EncodeToString(actual))
-	}
-	if err := file.Sync(); err != nil {
-		return fmt.Errorf("sync mpv archive: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close mpv archive: %w", err)
-	}
-	keep = true
-	return nil
-}
-
-func expectedSHA256(digest string) ([]byte, error) {
-	algorithm, value, ok := strings.Cut(strings.TrimSpace(digest), ":")
-	if !ok || !strings.EqualFold(algorithm, "sha256") {
-		return nil, errors.New("release metadata has no SHA-256 digest")
-	}
-	decoded, err := hex.DecodeString(value)
-	if err != nil || len(decoded) != sha256.Size {
-		return nil, errors.New("release metadata has an invalid SHA-256 digest")
-	}
-	return decoded, nil
 }
 
 func extractZIP(archivePath, destination string) error {
@@ -465,47 +348,6 @@ func findExecutable(root string, spec platformSpec) string {
 func executableFile(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
-}
-
-func githubHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout: 10 * time.Minute,
-		CheckRedirect: func(request *http.Request, previous []*http.Request) error {
-			if len(previous) >= 10 {
-				return errors.New("too many redirects while downloading mpv")
-			}
-			if request.URL.Scheme != "https" || !allowedGitHubHost(request.URL.Hostname()) {
-				return fmt.Errorf("mpv download redirected to untrusted URL %s", request.URL.Redacted())
-			}
-			return nil
-		},
-	}
-}
-
-func allowedGitHubHost(host string) bool {
-	for _, domain := range []string{"github.com", "githubusercontent.com"} {
-		if tiktok.DomainMatches(host, domain) {
-			return true
-		}
-	}
-	return false
-}
-
-func setGitHubHeaders(request *http.Request) {
-	request.Header.Set("Accept", "application/vnd.github+json")
-	request.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	request.Header.Set("User-Agent", "tiktok-crawler-mpv-bootstrap")
-}
-
-func equalBytes(left, right []byte) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	var difference byte
-	for index := range left {
-		difference |= left[index] ^ right[index]
-	}
-	return difference == 0
 }
 
 func (manager *Manager) report(format string, arguments ...any) {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/hatienl0i2612/tiktok-crawler/internal/jsonvalue"
 )
@@ -63,11 +64,13 @@ type pageVideoItem struct {
 		OriginCover  string `json:"originCover"`
 		DynamicCover string `json:"dynamicCover"`
 		BitrateInfo  []struct {
-			Bitrate   int64  `json:"Bitrate"`
-			CodecType string `json:"CodecType"`
-			FPS       int    `json:"BitrateFPS"`
-			GearName  string `json:"GearName"`
-			PlayAddr  struct {
+			Bitrate    int64  `json:"Bitrate"`
+			CodecType  string `json:"CodecType"`
+			Format     string `json:"Format"`
+			VideoExtra string `json:"VideoExtra"`
+			FPS        int    `json:"BitrateFPS"`
+			GearName   string `json:"GearName"`
+			PlayAddr   struct {
 				DataSize jsonvalue.Int64 `json:"DataSize"`
 				Height   int             `json:"Height"`
 				Width    int             `json:"Width"`
@@ -75,7 +78,8 @@ type pageVideoItem struct {
 				URLList  []string        `json:"UrlList"`
 			} `json:"PlayAddr"`
 		} `json:"bitrateInfo"`
-		CLAInfo struct {
+		BitrateAudioInfo []pageAudioInfo `json:"bitrateAudioInfo"`
+		CLAInfo          struct {
 			CaptionInfos []struct {
 				Language          string          `json:"lang"`
 				CaptionFormat     string          `json:"captionFormat"`
@@ -86,6 +90,18 @@ type pageVideoItem struct {
 			} `json:"captionInfos"`
 		} `json:"claInfo"`
 	} `json:"video"`
+}
+
+type pageAudioInfo struct {
+	FileHash string          `json:"FileHash"`
+	FileID   string          `json:"FileId"`
+	Bitrate  int64           `json:"Bitrate"`
+	DataSize jsonvalue.Int64 `json:"AudioDataSize"`
+	URLList  struct {
+		Main     string `json:"MainUrl"`
+		Backup   string `json:"BackupUrl"`
+		Fallback string `json:"FallbackUrl"`
+	} `json:"UrlList"`
 }
 
 func parsePageVideoItem(body []byte) (*pageVideoItem, error) {
@@ -126,9 +142,12 @@ func buildPageResult(inputURL, finalURL string, item pageVideoItem) *Result {
 	for _, profile := range video.BitrateInfo {
 		address := profile.PlayAddr
 		info.Profiles = append(info.Profiles, playerProfile{
-			Bitrate: profile.Bitrate, CodecType: profile.CodecType, FPS: profile.FPS, GearName: profile.GearName,
+			Bitrate: profile.Bitrate, CodecType: profile.CodecType, Format: profile.Format, FPS: profile.FPS, GearName: profile.GearName,
 			PlayAddr: playerPlayAddress{DataSize: int64(address.DataSize), Height: address.Height, Width: address.Width, URI: address.URI, URLList: uniqueStrings(address.URLList)},
 		})
+		if strings.EqualFold(profile.Format, "dash") {
+			info.Profiles[len(info.Profiles)-1].Audio = makeDASHAudio(profile.VideoExtra, video.BitrateAudioInfo)
+		}
 	}
 	for _, caption := range video.CLAInfo.CaptionInfos {
 		info.CLAInfo.CaptionInfos = append(info.CLAInfo.CaptionInfos, playerCaption{
@@ -163,4 +182,28 @@ func buildPageResult(inputURL, finalURL string, item pageVideoItem) *Result {
 		result.Video.CreatedAt = nil
 	}
 	return result
+}
+
+func makeDASHAudio(videoExtra string, tracks []pageAudioInfo) *Media {
+	// Keep a required but empty track on incomplete metadata so downloading fails instead of producing a silent file.
+	audio := &Media{Type: "audio", Kind: "playback", Format: "m4a", Codec: "unknown"}
+	var extra struct {
+		AudioFileID string `json:"audio_file_id"`
+	}
+	if json.Unmarshal([]byte(videoExtra), &extra) != nil || extra.AudioFileID == "" {
+		return audio
+	}
+	for _, track := range tracks {
+		if track.FileHash != extra.AudioFileID && track.FileID != extra.AudioFileID {
+			continue
+		}
+		urls := uniqueStrings([]string{track.URLList.Main, track.URLList.Backup, track.URLList.Fallback})
+		if len(urls) > 0 {
+			audio.URL, audio.BackupURLs = urls[0], urls[1:]
+			audio.Size, audio.Bitrate, audio.URI = int64(track.DataSize), track.Bitrate, extra.AudioFileID
+			audio.ExpiresAt = expiryFromURL(urls[0])
+		}
+		return audio
+	}
+	return audio
 }

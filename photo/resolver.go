@@ -33,28 +33,23 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		return nil, errors.New("URL must contain a TikTok /photo/<id> path")
 	}
 	body, err := tiktok.FetchPlayerItem(ctx, client.session, photoID, inputURL.String(), maxMetadataResponseSize)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if err != nil {
-		return nil, err
+		return client.resolveFallback(ctx, inputURL, photoID, err)
 	}
 	var response playerResponse
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	if err := decoder.Decode(&response); err != nil {
-		return nil, fmt.Errorf("decode player metadata: %w", err)
+		return client.resolveFallback(ctx, inputURL, photoID, fmt.Errorf("decode player metadata: %w", err))
 	}
 	if response.StatusCode != 0 {
-		return nil, fmt.Errorf("TikTok player returned status %d: %s", response.StatusCode, response.StatusMsg)
+		return client.resolveFallback(ctx, inputURL, photoID, fmt.Errorf("TikTok player returned status %d: %s", response.StatusCode, response.StatusMsg))
 	}
 	if len(response.Items) == 0 {
-		embed, embedErr := client.fetchEmbedPhoto(ctx, photoID, inputURL.String())
-		if embedErr != nil {
-			return nil, fmt.Errorf("TikTok player returned no Photo Post item and the Story embed fallback failed: %w", embedErr)
-		}
-		result := buildEmbedResult(inputURL.String(), embed, true)
-		if len(result.Images) == 0 {
-			return nil, errors.New("TikTok returned Story metadata but no downloadable images")
-		}
-		return result, nil
+		return client.resolveFallback(ctx, inputURL, photoID, nil)
 	}
 	item := response.Items[0]
 	resolvedID := item.IDStr
@@ -98,7 +93,35 @@ func (client *Client) Resolve(ctx context.Context, rawURL string) (*Result, erro
 		result.Warnings = append(result.Warnings, "embed metadata unavailable: "+embedErr.Error())
 	}
 	if len(result.Images) == 0 {
-		return nil, errors.New("TikTok returned metadata but no downloadable Photo Post images")
+		return client.resolveFallback(ctx, inputURL, photoID, errors.New("TikTok player returned metadata but no downloadable Photo Post images"))
+	}
+	return result, nil
+}
+
+func (client *Client) resolveFallback(ctx context.Context, inputURL *url.URL, photoID string, playerErr error) (*Result, error) {
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	result, pageErr := client.fetchPagePhoto(ctx, inputURL, photoID)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if pageErr != nil {
+		embed, embedErr := client.fetchEmbedPhoto(ctx, photoID, inputURL.String())
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if embedErr != nil {
+			return nil, errors.Join(playerErr, fmt.Errorf("Photo Post page fallback failed: %w", pageErr), fmt.Errorf("Photo Post embed fallback failed: %w", embedErr))
+		}
+		result = buildEmbedResult(inputURL.String(), embed, playerErr == nil)
+		if len(result.Images) == 0 {
+			return nil, errors.Join(playerErr, pageErr, errors.New("TikTok returned embed metadata but no downloadable images"))
+		}
+		result.Warnings = append(result.Warnings, "Photo Post page unavailable: "+pageErr.Error())
+	}
+	if playerErr != nil {
+		result.Warnings = append(result.Warnings, "player metadata unavailable: "+playerErr.Error())
 	}
 	return result, nil
 }

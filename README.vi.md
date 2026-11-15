@@ -25,7 +25,7 @@ client, _ := tiktokcrawler.NewClient(config)
 result, err := client.Resolve(ctx, "https://www.tiktok.com/@example/video/1234567890123456789")
 ```
 
-Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `hashtag`, `photo`, `livestream`, `mpv`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
+Hoặc dùng trực tiếp các subpackage: `video`, `profile`, `hashtag`, `photo`, `livestream`, `mpv`, `ffmpeg`, `shortdrama`, `cookies`, `downloader`, `media`, `tiktok`. API đầy đủ trên [pkg.go.dev](https://pkg.go.dev/github.com/hatienl0i2612/tiktok-crawler).
 
 ## Tải bản phát hành
 
@@ -75,6 +75,12 @@ Thay các URL ví dụ bằng video TikTok hoặc phòng LIVE mà bạn muốn x
 | Hashtag | `https://www.tiktok.com/tag/<name>` | Tải các video public do tag embed của TikTok cung cấp |
 | Tập Short Drama | `https://www.tiktok.com/shortdrama/episode/<id>/<episode>` | Tải tập phim |
 | LIVE | `https://www.tiktok.com/@username/live` | Mở stream tốt nhất bằng mpv |
+
+## FFmpeg cho video DASH
+
+Một số profile chất lượng của TikTok tách riêng hình và tiếng. Downloader tải cả hai track, thử các URL dự phòng khi cần, rồi dùng FFmpeg ghép thành một MP4 bằng stream copy, giữ nguyên chất lượng gốc.
+
+Khi cần, công cụ ưu tiên `ffmpeg` trong PATH; nếu chưa có, công cụ tự tải bản portable từ [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static), kiểm tra SHA-256 và cache tại `<thư mục tạm của hệ điều hành>/tiktok-crawler/ffmpeg/<os>-<arch>`, không cần quyền quản trị. Tự cài hỗ trợ macOS amd64/arm64, Linux amd64/arm64/arm/386 và Windows amd64. Nền tảng khác có thể tự cài FFmpeg vào PATH. Chế độ `-json` và video đã chứa cả hình lẫn tiếng không cần tải FFmpeg.
 
 ## Tùy chọn CLI
 

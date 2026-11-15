@@ -553,6 +553,7 @@ func runProfile(options options, cookie string, stdout, stderr io.Writer) error 
 	downloads, err := downloader.DownloadAll(ctx, client.Session(), items, downloader.FileInfo{
 		Author: result.User.UniqueID, VideoID: "videos", Referer: result.FinalURL,
 	}, downloader.BatchOptions{
+		Status:    stderr,
 		OutputDir: outputDirectory, Quality: options.quality, Watermarked: options.watermark,
 		Progress: func(update downloader.BatchProgress) {
 			progress.update(update.DownloadProgress)
@@ -617,6 +618,7 @@ func runHashtag(options options, cookie string, stdout, stderr io.Writer) error 
 	downloads, err := downloader.DownloadAll(ctx, client.Session(), items, downloader.FileInfo{
 		Author: result.Hashtag.Name, VideoID: "videos", Referer: result.FinalURL,
 	}, downloader.BatchOptions{
+		Status:    stderr,
 		OutputDir: outputDirectory, Quality: options.quality, Watermarked: options.watermark,
 		Progress: func(update downloader.BatchProgress) {
 			progress.update(update.DownloadProgress)
@@ -665,6 +667,7 @@ func downloadVideo(
 ) error {
 	progress := newProgressDisplay(stderr)
 	download, err := downloader.Download(ctx, session, variants, file, downloader.Options{
+		Status:      stderr,
 		OutputPath:  options.output,
 		Quality:     options.quality,
 		Watermarked: options.watermark,
@@ -698,6 +701,7 @@ func downloadPhoto(
 	}
 	progress := newProgressDisplay(stderr)
 	downloads, err := downloader.DownloadAll(ctx, session, items, file, downloader.BatchOptions{
+		Status:      stderr,
 		OutputDir:   options.output,
 		Watermarked: options.watermark,
 		Progress: func(update downloader.BatchProgress) {
@@ -716,6 +720,7 @@ func downloadPhoto(
 	if musicMedia := makeMusicMedia(music.PlaybackURLs); len(musicMedia) > 0 {
 		outputDirectory := filepath.Dir(downloads.Downloads[0].Path)
 		musicDownload, err := downloader.Download(ctx, session, musicMedia, file, downloader.Options{
+			Status:     stderr,
 			OutputPath: filepath.Join(outputDirectory, "music."+musicMedia[0].Format),
 			Progress:   progress.update,
 			OnStart: func(start downloader.DownloadStart) {

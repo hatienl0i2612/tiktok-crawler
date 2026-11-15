@@ -62,6 +62,53 @@ func TestDownloadUsesBackupAndReportsProgress(t *testing.T) {
 	}
 }
 
+func TestDownloadImageFromRegionalCDNUsesBackupAndRedirect(t *testing.T) {
+	t.Parallel()
+	const primaryURL = "https://p16-common-sign.tiktokcdn-us.com/image.jpeg"
+	const backupURL = "https://cdn-new-region.example/image.jpeg"
+	const finalURL = "https://media-another-region.example/final.jpeg"
+	payload := []byte{0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4}
+	session, err := tiktok.NewSession(tiktok.SessionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var requests []string
+	session.HTTPClient().Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests = append(requests, request.URL.String())
+		response := &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Request: request}
+		switch request.URL.String() {
+		case primaryURL:
+			response.StatusCode, response.Status = http.StatusForbidden, "403 Forbidden"
+			response.Body = io.NopCloser(strings.NewReader("forbidden"))
+		case backupURL:
+			response.StatusCode = http.StatusFound
+			response.Header.Set("Location", finalURL)
+			response.Body = io.NopCloser(strings.NewReader(""))
+		case finalURL:
+			response.Header.Set("Content-Type", "image/jpeg")
+			response.ContentLength = int64(len(payload))
+			response.Body = io.NopCloser(bytes.NewReader(payload))
+		default:
+			t.Fatalf("unexpected request: %s", request.URL)
+		}
+		return response, nil
+	})
+	outputPath := filepath.Join(t.TempDir(), "image.jpeg")
+	result, err := Download(context.Background(), session, []media.Variant{{
+		Type: "image", URL: primaryURL, BackupURLs: []string{backupURL},
+	}}, FileInfo{}, Options{OutputPath: outputPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(requests, ",") != strings.Join([]string{primaryURL, backupURL, finalURL}, ",") || result.SourceURL != finalURL {
+		t.Fatalf("requests=%v result=%+v", requests, result)
+	}
+	written, err := os.ReadFile(outputPath)
+	if err != nil || !bytes.Equal(written, payload) || result.Bytes != int64(len(payload)) {
+		t.Fatalf("downloaded image = %v, %v; result=%+v", written, err, result)
+	}
+}
+
 func TestDownloadHelpers(t *testing.T) {
 	t.Parallel()
 	if !looksLikeMedia("video", "video/mp4; charset=binary", nil) || !looksLikeMedia("video", "application/octet-stream", []byte{0, 0, 0, 20, 'f', 't', 'y', 'p'}) {
@@ -237,7 +284,8 @@ func TestDownloadValidation(t *testing.T) {
 		{name: "empty output", variant: media.Variant{URL: "https://v16.tiktokcdn.com/video"}},
 		{name: "existing output", variant: media.Variant{URL: "https://v16.tiktokcdn.com/video"}, output: existingPath},
 		{name: "missing URL", output: filepath.Join(directory, "missing.mp4")},
-		{name: "disallowed host", variant: media.Variant{URL: "https://example.org/video"}, output: filepath.Join(directory, "disallowed.mp4")},
+		{name: "non-HTTPS URL", variant: media.Variant{URL: "http://cdn-region.example/video"}, output: filepath.Join(directory, "insecure.mp4")},
+		{name: "missing host", variant: media.Variant{URL: "https:///video"}, output: filepath.Join(directory, "no-host.mp4")},
 		{name: "non-video response", variant: media.Variant{URL: "https://v16.tiktokcdn.com/video"}, output: filepath.Join(directory, "not-video.mp4")},
 		{name: "missing directory", variant: media.Variant{URL: "https://v16.tiktokcdn.com/video"}, output: filepath.Join(directory, "missing", "video.mp4")},
 	} {

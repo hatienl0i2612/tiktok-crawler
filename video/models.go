@@ -67,9 +67,11 @@ type playerURLList struct {
 type playerProfile struct {
 	Bitrate   int64             `json:"bitrate"`
 	CodecType string            `json:"codec_type"`
+	Format    string            `json:"format"`
 	FPS       int               `json:"fps"`
 	GearName  string            `json:"gear_name"`
 	PlayAddr  playerPlayAddress `json:"play_addr"`
+	Audio     *Media            `json:"-"`
 }
 
 type playerPlayAddress struct {

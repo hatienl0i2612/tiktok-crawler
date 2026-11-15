@@ -25,20 +25,17 @@ func TestParseURL(t *testing.T) {
 	}
 }
 
-func TestAllowedHosts(t *testing.T) {
+func TestPageHosts(t *testing.T) {
 	t.Parallel()
-	for _, host := range []string{"tiktok.com", "v16.tiktokcdn.com", "api.tiktokv.com.", "media.ibytedtos.com", "video.byteoversea.com"} {
-		if !IsAllowedHost(host) {
-			t.Errorf("expected host %q to be allowed", host)
+	for _, host := range []string{"tiktok.com", "m.tiktok.com", "WWW.TIKTOK.COM."} {
+		if !IsPageHost(host) {
+			t.Errorf("expected page host %q to be allowed", host)
 		}
 	}
-	for _, host := range []string{"example.org", "tiktokcdn.com.example.org", "eviltiktok.com"} {
-		if IsAllowedHost(host) {
-			t.Errorf("expected host %q to be rejected", host)
+	for _, host := range []string{"example.org", "tiktok.com.example.org", "eviltiktok.com", "v16.tiktokcdn.com", "p16-common-sign.tiktokcdn-us.com"} {
+		if IsPageHost(host) {
+			t.Errorf("expected page host %q to be rejected", host)
 		}
-	}
-	if IsPageHost("v16.tiktokcdn.com") {
-		t.Fatal("a CDN host must not be accepted as a TikTok page host")
 	}
 }
 
@@ -56,14 +53,19 @@ func TestSessionHeadersCookieAndRedirectPolicy(t *testing.T) {
 	if got := session.CookieValue("msToken"); got != "token" {
 		t.Fatalf("CookieValue() = %q", got)
 	}
-	allowed, _ := http.NewRequest(http.MethodGet, "https://v16.tiktokcdn.com/video", nil)
-	if err := session.HTTPClient().CheckRedirect(allowed, nil); err != nil {
-		t.Fatalf("allow TikTok redirect: %v", err)
+	for _, target := range []string{"https://v16.tiktokcdn.com/video", "https://cdn-new-region.example/video"} {
+		request, _ := http.NewRequest(http.MethodGet, target, nil)
+		if err := session.HTTPClient().CheckRedirect(request, nil); err != nil {
+			t.Fatalf("allow HTTPS redirect %q: %v", target, err)
+		}
 	}
-	disallowed, _ := http.NewRequest(http.MethodGet, "https://example.org/video", nil)
-	if err := session.HTTPClient().CheckRedirect(disallowed, nil); err == nil {
-		t.Fatal("external redirect was unexpectedly allowed")
+	for _, target := range []string{"http://cdn-new-region.example/video", "https:///video"} {
+		request, _ := http.NewRequest(http.MethodGet, target, nil)
+		if err := session.HTTPClient().CheckRedirect(request, nil); err == nil {
+			t.Fatalf("invalid HTTPS redirect %q was allowed", target)
+		}
 	}
+	allowed, _ := http.NewRequest(http.MethodGet, "https://cdn-new-region.example/video", nil)
 	if err := session.HTTPClient().CheckRedirect(allowed, make([]*http.Request, 10)); err == nil {
 		t.Fatal("redirect limit was not enforced")
 	}

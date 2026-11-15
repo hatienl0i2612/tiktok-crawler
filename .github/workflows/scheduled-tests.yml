@@ -24,4 +24,4 @@ jobs:
           cache: true
 
       - name: Test
-        run: go test -race -count=1 ./... -v
+        run: go test -race -count=1 ./...

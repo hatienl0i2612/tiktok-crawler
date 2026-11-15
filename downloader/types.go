@@ -1,7 +1,11 @@
 // Package downloader selects and downloads TikTok media files.
 package downloader
 
-import "github.com/hatienl0i2612/tiktok-crawler/media"
+import (
+	"io"
+
+	"github.com/hatienl0i2612/tiktok-crawler/media"
+)
 
 // DownloadProgress reports downloaded bytes and the expected total.
 type DownloadProgress struct {
@@ -31,6 +35,8 @@ type Options struct {
 	Watermarked bool
 	Progress    func(DownloadProgress)
 	OnStart     func(DownloadStart)
+	// Status receives FFmpeg installation and muxing messages. It may be nil.
+	Status io.Writer
 }
 
 // DownloadStart describes the selected variant and destination.
@@ -56,6 +62,7 @@ type BatchOptions struct {
 	Watermarked bool
 	Progress    func(BatchProgress)
 	OnStart     func(BatchStart)
+	Status      io.Writer
 }
 
 // BatchProgress reports the progress of one file in a media collection.

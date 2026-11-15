@@ -165,12 +165,15 @@ func TestPlayArguments(t *testing.T) {
 	}
 }
 
-func TestPlayRejectsUntrustedStream(t *testing.T) {
+func TestPlayValidatesStreamURL(t *testing.T) {
 	manager := newTestManager(t, "linux", "amd64")
-	for _, streamURL := range []string{"http://pull.tiktokcdn.com/live.m3u8", "https://example.com/live.m3u8"} {
-		if err := manager.Play(context.Background(), "/bin/false", streamURL, PlayOptions{}); err == nil {
-			t.Fatalf("Play(%q) succeeded", streamURL)
+	for _, streamURL := range []string{"http://pull.tiktokcdn.com/live.m3u8", "https:///live.m3u8", "file:///live.m3u8"} {
+		if err := manager.Play(context.Background(), "", streamURL, PlayOptions{}); err == nil || !strings.Contains(err.Error(), "valid HTTPS stream URL") {
+			t.Fatalf("Play(%q) error = %v", streamURL, err)
 		}
+	}
+	if err := manager.Play(context.Background(), "", "https://stream-new-region.example/live.m3u8", PlayOptions{}); err == nil || err.Error() != "mpv executable path is empty" {
+		t.Fatalf("regional stream URL was rejected before executable validation: %v", err)
 	}
 }
 

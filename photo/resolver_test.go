@@ -158,6 +158,8 @@ func TestResolvePhotoStoryFromEmbedFallback(t *testing.T) {
 			return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), ContentLength: int64(len(body)), Request: request}, nil
 		case "/embed/v2/" + storyID:
 			return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Header: make(http.Header), Body: io.NopCloser(strings.NewReader(embedBody)), ContentLength: int64(len(embedBody)), Request: request}, nil
+		case "/@dongmaulacviet1/video/" + storyID:
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("<html>CSR shell</html>")), Request: request}, nil
 		default:
 			return nil, errors.New("unexpected request: " + request.URL.String())
 		}
@@ -167,8 +169,8 @@ func TestResolvePhotoStoryFromEmbedFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if requestCount != 2 {
-		t.Fatalf("request count = %d, want 2", requestCount)
+	if requestCount != 3 {
+		t.Fatalf("request count = %d, want 3", requestCount)
 	}
 	if !result.IsStory || len(result.Sources) != 1 || result.Sources[0] != "embed/v2" {
 		t.Fatalf("unexpected Story source metadata: %+v", result)

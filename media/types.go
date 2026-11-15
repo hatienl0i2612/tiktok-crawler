@@ -26,6 +26,8 @@ type Variant struct {
 	URL         string     `json:"url"`
 	BackupURLs  []string   `json:"backup_urls,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// Audio is the separate track required to mux a video-only DASH representation.
+	Audio *Variant `json:"audio,omitempty"`
 }
 
 // Sort orders variants by watermark, pixel count, bitrate, codec, and URL.

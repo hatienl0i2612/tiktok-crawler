@@ -60,8 +60,8 @@ func NewSession(options SessionOptions) (*Session, error) {
 				if len(previous) >= 10 {
 					return errors.New("too many redirects")
 				}
-				if request.URL.Scheme != "https" || !IsAllowedHost(request.URL.Hostname()) {
-					return fmt.Errorf("TikTok redirected to a disallowed host: %s", request.URL.Redacted())
+				if request.URL.Scheme != "https" || request.URL.Hostname() == "" {
+					return fmt.Errorf("TikTok redirected to an invalid HTTPS URL: %s", request.URL.Redacted())
 				}
 				return nil
 			},
@@ -235,22 +235,6 @@ func ParseURL(rawURL string) (*url.URL, error) {
 // IsPageHost reports whether host belongs to tiktok.com.
 func IsPageHost(host string) bool {
 	return DomainMatches(host, "tiktok.com")
-}
-
-// IsAllowedHost reports whether host is a known TikTok page or media domain.
-func IsAllowedHost(host string) bool {
-	for _, domain := range []string{
-		"tiktok.com",
-		"tiktokcdn.com",
-		"tiktokv.com",
-		"ibytedtos.com",
-		"byteoversea.com",
-	} {
-		if DomainMatches(host, domain) {
-			return true
-		}
-	}
-	return false
 }
 
 // DomainMatches performs an exact or subdomain-safe DNS suffix match.
